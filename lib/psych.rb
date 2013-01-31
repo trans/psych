@@ -310,7 +310,6 @@ module Psych
   @global_tags = DEFAULT_SCHEMA #Schema.new
 
   def self.add_domain_type domain, type_tag, &block
-Psych.log domain, type_tag
     tag = ['tag', domain, type_tag].join ':'
     @global_tags.add(tag, block)
     @global_tags.add("tag:#{tag}", block)
@@ -330,7 +329,7 @@ Psych.log domain, type_tag
     @global_tags.add(tag, klass)
   end
 
-  #
+  # TODO: temporary for debuging
   def self.log(*objs)
     $stderr.puts objs.inspect
   end

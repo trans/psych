@@ -80,15 +80,15 @@ module Psych
           return @emitter.alias anchor
         end
 
+        # TODO: Shall we talk about *hacks*!?
         if target.respond_to?(:to_yaml)
           begin
             loc = target.method(:to_yaml).source_location.first
-            if loc !~ /(syck\/rubytypes.rb|psych\/core_ext.rb)/
+            if loc !~ /(syck\/rubytypes.rb|psych\/core_ext)/
               unless target.respond_to?(:encode_with)
                 if $VERBOSE
                   warn "implementing to_yaml is deprecated, please implement \"encode_with\""
                 end
-
                 target.to_yaml(:nodump => true)
               end
             end
