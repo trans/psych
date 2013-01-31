@@ -67,26 +67,14 @@ module Psych
     end
 
     # Helper method to convert +klassname+ to a class.
+    # Actually calls `Psych.resolve_class`.
     def resolve_class klassname
-      return nil unless klassname and not klassname.empty?
-
-      name    = klassname
-      retried = false
-
-      begin
-        path2class(name)
-      rescue ArgumentError, NameError => ex
-        unless retried
-          name    = "Struct::#{name}"
-          retried = ex
-          retry
-        end
-        raise retried
-      end
+      Psych.resolve_class klassname
     end
 
     private
 
+    #
     def normalize_tag(tag)
       if String === tag
         tag = tag.sub(/(,\d+)\//, '\1:') if String === tag
