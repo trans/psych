@@ -11,12 +11,37 @@ class Object
   # case for immutable types.
   #
   def self.yaml_new(value)
-    #raise ArgumentError unless StateImage === value
-    if StateImage === value
-      o = allocate
-      value.each{ |k,v| o.instance_variable_set("@#{k}", v) }
-      o
+    case value
+    when Hash
+      if value.key?('ivars') || value.key?('internal')
+        o = allocate
+        if method_defined?(:yaml_initialize)
+          o.yaml_initialize(value['internal'])
+        end
+        value['ivars'].each{ |k,v| o.instance_variable_set(k, v) }
+        o
+      else
+        # TODO: Is this the way?
+        o = allocate
+        value.each do |k,v|
+          k = "@#{k}" unless k.to_s.start_with?('@')
+          o.instance_variable_set(k, v)
+        end
+        o
+      end
+    else
+      # TODO: what the hell do we do here?
     end
+  end
+
+  #
+  def yaml_tag
+    @_yaml_tag
+  end
+
+  #
+  def yaml_tag=(tag)
+    @_yaml_tag = tag
   end
 
   # FIXME: rename this to "to_yaml" when syck is removed
