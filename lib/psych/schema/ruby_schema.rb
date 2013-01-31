@@ -44,34 +44,57 @@ module Psych
     s.tag '!ruby/object:Complex', Complex
     s.tag '!ruby/object:Rational', Rational
 
-    # not built-in classes
-    s.tag /^!ruby\/object:(?:.*?)/ do |tag, value|
-      s.resolve_class($1)
+    # exceptions
+    s.tag /^!ruby\/exception:?(.*)?$/ do |tag, md|  # value?
+      s.resolve_class(md[1])
     end
 
-    s.tag /^!ruby\/struct:(?:.*?)/ do |tag, value|
-      s.resolve_class($1)
+    # other classes
+    s.tag /^!ruby\/object:(.*?)$/ do |tag, md|  # value?
+      s.resolve_class(md[1])
     end
 
-    # Deprecate: There is really no reason for these anymore, but we
+    # TODO: Not sure about struct, if we need this or not (see next todo note).
+
+    s.tag /^!ruby\/struct:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
+    end
+
+    # TODO: Deprecate these? There is really no reason for these anymore, but we
     # need to change the tags the classes are emitting first.
 
-    s.tag /^!ruby\/string:(?:.*?)/ do |tag, value|
-      s.resolve_class($1)
+    s.tag /^!ruby\/string:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
     end
 
-    s.tag /^!ruby\/array:(.*)$/ do |tag, value|
-      s.resolve_class($1)
+    s.tag /^!ruby\/array:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
     end
 
-    s.tag /^!ruby\/hash:(?:.*?)/ do |tag, value|
-      s.resolve_class($1)
+    s.tag /^!ruby\/hash:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
     end
 
     # FIXME: this probably won't work
-    s.tag /^!ruby\/sym(bol)?:?(.*)?$/ do |tag, value|
-      s.resolve_class($1)
+    s.tag /^!ruby\/sym(bol)?:(.*?)$/ do |tag, md|
+p [tag, md]
+      s.resolve_class(md[1])  #md[2]?
     end
+
+    # TODO: Deprecate these too? More tags that are probably unnecessary.
+
+    s.tag /^!str:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
+    end
+
+    s.tag /^!seq:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
+    end
+
+    s.tag /^!map:(.*?)$/ do |tag, md|
+      s.resolve_class(md[1])
+    end
+
 
 =begin
     # Object
