@@ -83,30 +83,22 @@ module Psych
         # just becuase it is quoted doesn't mean it doesn't have a type!
         #return o.value if o.quoted  # literal string
 
-        resolve_tag(o, kind)
+        if o.tag && o.tag.start_with?('!ruby')
+          resolve_ruby_tag(o, kind)
+        else
+          resolve_tag(o, kind)
+        end
       end
 
       # Resolve a node based on its tag.
       #
       # Returns nil if there is no tag, or if there was not type assigned to the tag.
       def resolve_tag o, kind=:scalar
-        if o.tag
-          tag, type = @schema.tags[kind].find do |t, _|
-            t === o.tag
-          end
-        else
-          type = {:scalar=>nil, :sequence=>Array, :mapping=>Hash}[kind]
-        end
-
-        # TODO: Okay ?
-        if Proc === type
-          type = type.call(o.tag, o.value)
-          raise ArgumentError unless Class == type
-        end
+        type = resolve_type(o, kind)
 
         case type
         when Class
-          if type.instance_method(:yaml_initialize)
+          if type.method_defined?(:yaml_initialize)
             instance = register o, type.allocate
             value = resolve_value(o, kind)
             instance.yaml_initialize(value)
@@ -125,6 +117,57 @@ module Psych
         instance.yaml_tag = o.tag if instance && o.tag
 
         instance
+      end
+
+      #
+      def resolve_ruby_tag(o, kind)
+        type = resolve_type(o, kind)
+
+        if type.method_defined?(:yaml_initialize)
+          instance = register o, type.allocate
+          value = resolve_value(o, kind)
+          val = (Hash === value ? value['internal'] : value)
+          instance.yaml_initialize(val)
+        else
+          value = resolve_value(o, kind)
+          val = (Hash === value ? value['internal'] : value)
+          instance = type.yaml_new(val)
+        end
+
+        if Hash === value
+          value['ivars'].each{ |k,v| instance.instance_variable_set("#{k}", v) }
+        end
+
+        instance.yaml_tag = o.tag if instance
+
+        instance
+      end
+
+      # 
+      def resolve_type(o, kind)
+        md = nil
+
+        if o.tag
+          tag, type = @schema.tags.find do |t, _|
+            if Regexp === t
+              md = t.match(o.tag)
+            else
+              t == o.tag
+            end
+          end
+        else
+          type = {:scalar=>nil, :sequence=>Array, :mapping=>Hash}[kind]
+        end
+
+        # TODO: Will this be okay? It means using a block to instantiate a tag type is completely deprecated.
+        #       Instead the block must return a class. So all tags must be associated with a class, though more
+        #       then one tag can be associated with the same class.
+        if Proc === type
+          type = type.call(o.tag, md)
+          raise ArgumentError, "not a class -- `#{type}'" unless Class === type
+        end
+
+        return type
       end
 
       # Resolve value based on node kind.
