@@ -31,8 +31,8 @@ module Psych
       # Convert this node to Ruby.
       #
       # See also Psych::Visitors::ToRuby
-      def to_ruby
-        Visitors::ToRuby.new.accept self
+      def to_ruby(options={})
+        Visitors::ToRuby.new(options).accept self
       end
       alias :transform :to_ruby
 

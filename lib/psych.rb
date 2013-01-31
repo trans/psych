@@ -14,6 +14,8 @@ require 'psych/stream'
 require 'psych/json/tree_builder'
 require 'psych/json/stream'
 require 'psych/handlers/document_stream'
+require 'psych/schema'
+require 'psych/schema/default_schema'
 
 ###
 # = Overview
@@ -125,9 +127,10 @@ module Psych
   #     ex.file    # => 'file.txt'
   #     ex.message # => "(file.txt): found character that cannot start any token"
   #   end
-  def self.load yaml, filename = nil
+  def self.load yaml, options = {}
+    filename = (String === options ? options : options[:filename])
     result = parse(yaml, filename)
-    result ? result.to_ruby : result
+    result ? result.to_ruby(options) : result
   end
 
   ###
@@ -282,52 +285,61 @@ module Psych
   #   end
   #   list # => ['foo', 'bar']
   #
-  def self.load_stream yaml, filename = nil
+  def self.load_stream yaml, options
+    filename = (String === options ? options : options[:filename])
     if block_given?
       parse_stream(yaml, filename) do |node|
-        yield node.to_ruby
+        yield node.to_ruby(options)
       end
     else
-      parse_stream(yaml, filename).children.map { |child| child.to_ruby }
+      parse_stream(yaml, filename).children.map { |child| child.to_ruby(options) }
     end
   end
 
   ###
   # Load the document contained in +filename+.  Returns the yaml contained in
   # +filename+ as a ruby object
-  def self.load_file filename
-    File.open(filename, 'r:bom|utf-8') { |f| self.load f, filename }
+  def self.load_file filename, options
+    options[:filename] = filename
+    File.open(filename, 'r:bom|utf-8') { |f| self.load f, options }
   end
 
+  # Deprecated: Global type definitions should not be used.
+
   # :stopdoc:
-  @domain_types = {}
+  @global_tags = DEFAULT_SCHEMA #Schema.new
+
   def self.add_domain_type domain, type_tag, &block
-    key = ['tag', domain, type_tag].join ':'
-    @domain_types[key] = [key, block]
-    @domain_types["tag:#{type_tag}"] = [key, block]
+Psych.log domain, type_tag
+    tag = ['tag', domain, type_tag].join ':'
+    @global_tags.add(tag, block)
+    @global_tags.add("tag:#{tag}", block)
   end
 
   def self.add_builtin_type type_tag, &block
     domain = 'yaml.org,2002'
-    key = ['tag', domain, type_tag].join ':'
-    @domain_types[key] = [key, block]
+    tag = ['tag', domain, type_tag].join ':'
+    @global_tags.add(tag, block)
   end
 
-  def self.remove_type type_tag
-    @domain_types.delete type_tag
+  def self.remove_type tag
+    @global_tags.remove tag
   end
 
-  @load_tags = {}
-  @dump_tags = {}
   def self.add_tag tag, klass
-    @load_tags[tag] = klass
-    @dump_tags[klass] = tag
+    @global_tags.add(tag, klass)
+  end
+
+  #
+  def self.log(*objs)
+    $stderr.puts objs.inspect
   end
 
   class << self
-    attr_accessor :load_tags
-    attr_accessor :dump_tags
-    attr_accessor :domain_types
+     attr_accessor :global_tags
+  #  attr_accessor :load_tags
+  #  attr_accessor :dump_tags
+  #  attr_accessor :domain_types
   end
   # :startdoc:
 end

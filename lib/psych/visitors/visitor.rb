@@ -12,7 +12,12 @@ module Psych
       end
 
       def visit target
-        send DISPATCH[target.class], target
+        msg = DISPATCH[target.class]
+
+        # FIXME: okay I am stumped here. Where are these method supposed to be getting defined?
+        return target unless respond_to? msg
+
+        send msg, target
       end
     end
   end
