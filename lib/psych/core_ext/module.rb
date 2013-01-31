@@ -1,4 +1,8 @@
 class Module
+  def self.yaml_new(value)
+    Psych.resolve_class(value) 
+  end
+
   def psych_yaml_as url
     return if caller[0].end_with?('rubytypes.rb')
     if $VERBOSE
