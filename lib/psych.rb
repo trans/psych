@@ -304,10 +304,10 @@ module Psych
     File.open(filename, 'r:bom|utf-8') { |f| self.load f, options }
   end
 
-  # Deprecated: Global type definitions should not be used.
-
   # :stopdoc:
   @global_tags = DEFAULT_SCHEMA #Schema.new
+
+  # Deprecated: Global type definitions are not a good idea.
 
   def self.add_domain_type domain, type_tag, &block
     tag = ['tag', domain, type_tag].join ':'
@@ -341,4 +341,25 @@ module Psych
   #  attr_accessor :domain_types
   end
   # :startdoc:
+
+  # Helper method to convert +klassname+ to a class.
+  def self.resolve_class klassname
+    return nil unless klassname and not klassname.empty?
+
+    name    = klassname
+    retried = false
+
+    begin
+      #path2class(klassname)
+      klassname.split('::').inject(Object) { |k,n| k.const_get n }
+    rescue ArgumentError, NameError => ex
+      unless retried
+        name    = "Struct::#{name}"
+        retried = ex
+        retry
+      end
+      raise retried
+    end
+  end
+
 end
