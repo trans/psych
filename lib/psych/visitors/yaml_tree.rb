@@ -416,7 +416,7 @@ module Psych
 
       def dump_coder o
         @coders << o
-        tag = Psych.dump_tags[o.class]
+        tag = Psych.global_tags.dump_tags[o.class]
         unless tag
           klass = o.class == Object ? nil : o.class.name
           tag   = ['!ruby/object', klass].compact.join(':')
