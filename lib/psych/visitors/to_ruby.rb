@@ -21,6 +21,7 @@ module Psych
         @st = {}
         @ss = options[:ss] || ScalarScanner.new
         @schema = options[:schema] || DEFAULT_SCHEMA
+        @schema.resolve!
       end
 
       def visit_Psych_Nodes_Scalar o
@@ -80,7 +81,7 @@ module Psych
         #  return instance
         #end
 
-        # just becuase it is quoted doesn't mean it doesn't have a type!
+        # Just becuase it is quoted doesn't mean it doesn't have a type! Right?
         #return o.value if o.quoted  # literal string
 
         if o.tag && o.tag.start_with?('!ruby')
@@ -143,34 +144,26 @@ module Psych
         instance
       end
 
-      # 
+      # Resolve the tag's type, that is to say, its class.
+      #
+      # o    - YAML node.        [Psych::Nodes::Node]
+      # kind - The kind of node. [Symbol]
+      #
+      # Returns type. [Class,nil]
       def resolve_type(o, kind)
-        md = nil
-
         if o.tag
-          tag, type = @schema.tags.find do |t, _|
-            if Regexp === t
-              md = t.match(o.tag)
-            else
-              t == o.tag
-            end
-          end
+          tag, type = @schema.find(o.tag)
         else
           type = {:scalar=>nil, :sequence=>Array, :mapping=>Hash}[kind]
         end
-
-        # TODO: Will this be okay? It means using a block to instantiate a tag type is completely deprecated.
-        #       Instead the block must return a class. So all tags must be associated with a class, though more
-        #       then one tag can be associated with the same class.
-        if Proc === type
-          type = type.call(o.tag, md)
-          raise ArgumentError, "not a class -- `#{type}'" unless Class === type
-        end
-
         return type
       end
 
       # Resolve value based on node kind.
+      #
+      # o    - YAML node.        [Psych::Nodes::Node]
+      # kind - The kind of node. [Symbol]
+      #
       def resolve_value(o, kind)
         case kind
         when :scalar
@@ -178,16 +171,17 @@ module Psych
         when :sequence
           value = o.children.map { |c| accept c }
         when :mapping
-          value = {}
+          hash = {}
           o.children.each_slice(2) do |k,v|
             key = accept(k)
             val = accept(v)
             if key == '<<'
-              merge_key(value, val)
+              merge_key(hash, v, key, val)
             else
-              value[key] = accept(val)
+              hash[key] = val
             end
           end
+          value = hash
         end
         value
       end
@@ -297,24 +291,24 @@ module Psych
       end
 
       # The `<<` key is a merge key.
-      def merge_key(hash, node, node_value)
+      def merge_key(hash, node, key, value)
         case node
         when Nodes::Alias
           begin
-            hash.merge! node_value
+            hash.merge! value
           rescue TypeError
-            hash[key] = node_value
+            hash[key] = value
           end
         when Nodes::Sequence
           begin
             h = {}
-            node_value.reverse_each{ |v| h.merge! v }
+            value.reverse_each{ |v| h.merge! v }
             hash.merge! h
           rescue TypeError
-            hash[key] = node_value
+            hash[key] = value
           end
         else
-          hash[key] = node_value
+          hash[key] = value
         end
       end
 
@@ -413,6 +407,8 @@ module Psych
           raise retried
         end
       end
+
     end
+
   end
 end
