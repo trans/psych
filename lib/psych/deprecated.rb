@@ -38,18 +38,19 @@ module Psych
     ScalarScanner.new.tokenize(thing).class.name.downcase
   end
 
-  def self.add_ruby_type type_tag, &block
+  def self.add_ruby_type tag, type=nil, &block
     warn "#{caller[0]}: add_ruby_type is deprecated, use add_domain_type" if $VERBOSE
-    domain = 'ruby.yaml.org,2002'
-    key = ['tag', domain, type_tag].join ':'
-    @domain_types[key] = [key, block]
+    #domain = 'ruby.yaml.org,2002'
+    #key = ['tag', domain, type_tag].join ':'
+    #@domain_types[key] = [key, block]
+    @global_schema.ruby_tag(tag, type, &block)
   end
 
-  def self.add_private_type type_tag, &block
+  def self.add_private_type tag, type=nil, &block
     warn "#{caller[0]}: add_private_type is deprecated, use add_domain_type" if $VERBOSE
     domain = 'x-private'
-    key = [domain, type_tag].join ':'
-    @domain_types[key] = [key, block]
+    tag = [domain, tag].join ':'
+    @global_schema.tag(tag, type, &block)
   end
 
   def self.tagurize thing
