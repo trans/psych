@@ -1,5 +1,6 @@
 class Regexp
-  def self.yaml_new(value)
+  def self.new_with(coder)
+    value = coder.scalar
     value =~ /^\/(.*)\/([mixn]*)$/
     source  = $1
     options = 0

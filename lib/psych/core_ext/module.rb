@@ -1,6 +1,8 @@
 class Module
-  def self.yaml_new(value)
-    Psych.resolve_class(value) 
+  # See Class.new_with for details.
+  def self.new_with(coder)
+    name = coder.scalar
+    name.split('::').inject(Object) { |k,n| k.const_get n }
   end
 
   def psych_yaml_as url
