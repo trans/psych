@@ -12,7 +12,7 @@ end
 
 class Psych_Unit_Tests < Psych::TestCase
     def teardown
-        Psych.domain_types.clear
+      Psych.reset_schema!
     end
 
     def test_y_method

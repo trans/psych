@@ -3,7 +3,7 @@ require 'psych/helper'
 module Psych
   class TestDeprecated < TestCase
     def teardown
-      Psych.domain_types.clear
+      Psych.reset_schema!
     end
 
     class QuickEmitter

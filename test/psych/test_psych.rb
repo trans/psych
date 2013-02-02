@@ -5,7 +5,8 @@ require 'tempfile'
 
 class TestPsych < Psych::TestCase
   def teardown
-    Psych.domain_types.clear
+    Psych.global_schema = Psych::DEFAULT_SCHEMA.dup
+    #Psych.domain_types.clear
   end
 
   def test_line_width
@@ -53,7 +54,7 @@ class TestPsych < Psych::TestCase
     e = assert_raises(ArgumentError) do
       Psych.load("--- !ruby/object:NonExistent\nfoo: 1")
     end
-    assert_equal 'undefined class/module NonExistent', e.message
+    assert_includes e.message, 'NonExistent'
   end
 
   def test_dump_stream
@@ -98,30 +99,63 @@ class TestPsych < Psych::TestCase
   end
 
   def test_add_builtin_type
-    got = nil
-    Psych.add_builtin_type 'omap' do |type, val|
-      got = val
+    Psych.add_builtin_type 'omap' do |type|
+      Class.new{ attr :a }
     end
-    Psych.load('--- !!omap hello')
-    assert_equal 'hello', got
+    val = Psych.load("--- !!omap\n  a: hello")
+    assert_equal 'hello', val.a
   ensure
     Psych.remove_type 'omap'
   end
 
-  def test_domain_types
-    got = nil
-    Psych.add_domain_type 'foo.bar,2002', 'foo' do |type, val|
-      got = val
+  def test_add_domain_type_1
+    klass = Class.new do
+      def self.new_with(coder); coder.value; end
     end
 
-    Psych.load('--- !foo.bar,2002/foo hello')
-    assert_equal 'hello', got
+    got = nil
+    Psych.add_domain_type 'foo.bar,2002', 'foo' do |tag|
+      got = tag
+      klass
+    end
 
-    Psych.load("--- !foo.bar,2002/foo\n- hello\n- world")
-    assert_equal %w{ hello world }, got
+    # Without the `tag:` this is just a local tag, not a domain tag.
+    val = Psych.load('--- !<tag:foo.bar,2002/foo> hello')
+    assert_equal 'tag:foo.bar,2002:foo', got
+    assert_equal 'hello', val
+  end
 
-    Psych.load("--- !foo.bar,2002/foo\nhello: world")
-    assert_equal({ 'hello' => 'world' }, got)
+  def test_add_domain_type_2
+    klass = Class.new do
+      def self.new_with(coder); coder.value; end
+    end
+
+    got = nil
+    Psych.add_domain_type 'foo.bar,2002', 'foo' do |tag|
+      got = tag
+      klass
+    end
+
+    # Without the `tag:` this is just a local tag, not a domain tag.
+    val = Psych.load("--- !<tag:foo.bar,2002/foo>\n- hello\n- world")
+    assert_equal 'tag:foo.bar,2002:foo', got
+    assert_equal %w{ hello world }, val
+  end
+
+  def test_add_domain_type_3
+    klass = Class.new do
+      def self.new_with(coder); coder.value; end
+    end
+
+    got = nil
+    Psych.add_domain_type 'foo.bar,2002', 'foo' do |tag|
+      got = tag
+      klass
+    end
+
+    val = Psych.load("--- !tag:foo.bar,2002/foo\nhello: world")
+    assert_equal 'tag:foo.bar,2002:foo', got
+    assert_equal({ 'hello' => 'world' }, val)
   end
 
   def test_load_file
@@ -151,18 +185,18 @@ class TestPsych < Psych::TestCase
 
   def test_callbacks
     types = []
-    appender = lambda { |*args| types << args }
+    appender = lambda { |tag| types << tag; Class.new(String) }
 
     Psych.add_builtin_type('foo', &appender)
     Psych.add_domain_type('example.com,2002', 'foo', &appender)
     Psych.load <<-eoyml
-- !tag:yaml.org,2002:foo bar
-- !tag:example.com,2002:foo bar
+- !<tag:yaml.org,2002:foo> bar
+- !<tag:example.com,2002:foo> bar
     eoyml
 
     assert_equal [
-      ["tag:yaml.org,2002:foo", "bar"],
-      ["tag:example.com,2002:foo", "bar"]
+      "tag:yaml.org,2002:foo",
+      "tag:example.com,2002:foo"
     ], types
   end
 end

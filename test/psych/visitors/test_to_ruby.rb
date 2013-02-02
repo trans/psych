@@ -95,7 +95,6 @@ description:
         mapping.children << Nodes::Scalar.new('hello')
 
         ruby = mapping.to_ruby
-
         assert_equal exc.class, ruby.class
         assert_equal exc.message, ruby.message
       end

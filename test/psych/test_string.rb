@@ -22,6 +22,7 @@ module Psych
       assert_equal 1, y.val
     end
 
+    # Deprecate: 
     def test_backwards_with_syck
       x = Psych.load "--- !str:#{X.name} foo\n\n"
       assert_equal X, x.class

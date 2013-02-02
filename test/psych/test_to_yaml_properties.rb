@@ -54,7 +54,9 @@ module Psych
       assert_equal 'delicious', v.instance_variable_get(:@tastes)
     end
 
+    # DEPRECATED: This should no longer be supported, use `!ruby/string` tag instead.
     def test_string_load_syck
+      # TODO: how to raise deprecation exception?
       str = Psych.load("--- !str \nstr: okonomiyaki\n:@tastes: delicious\n")
       assert_equal 'okonomiyaki', str
       assert_equal 'delicious', str.instance_variable_get(:@tastes)
