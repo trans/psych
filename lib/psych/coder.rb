@@ -9,7 +9,7 @@ module Psych
     attr_accessor :tag, :style, :implicit, :object
     attr_reader   :type, :seq
 
-    def initialize tag
+    def initialize tag, scanner=nil
       @map      = {}
       @seq      = []
       @implicit = false
@@ -18,6 +18,7 @@ module Psych
       @style    = Psych::Nodes::Mapping::BLOCK
       @scalar   = nil
       @object   = nil
+      @scanner  = scanner
     end
 
     def scalar *args
@@ -90,5 +91,27 @@ module Psych
       @type = :seq
       @seq  = list
     end
+
+    # Return value of representation based on type.
+    def value
+      case type
+      when :scalar then @scalar
+      when :map then @map
+      when :seq then @seq
+      else
+        @object
+      end
+    end
+
+    # Tokenize scalar with scannar.
+    def token(alt=nil)
+      scanner.tokenize(alt || scalar)
+    end
+
+    # Some classes, such as DateTime, need to utilize the Scanner.
+    def scanner
+      @scanner ||= ScalarScanner.new
+    end
+
   end
 end
