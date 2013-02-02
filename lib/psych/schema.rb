@@ -1,5 +1,7 @@
 module Psych
 
+# FIXME: FUCK! TAG ORDER IS NOT BEING HONORED. HAVE TO REFACTOR!!!
+
   ###
   # TagTypes maps a set of tags to a set of classes or procedures
   # for instantiating the tag as a Ruby object.
@@ -25,23 +27,26 @@ module Psych
       @blocks = [block].compact
     end
 
+    # %TAG directives.
+    attr_reader :directives
+
     # Tag table in the form of `tag => class`.
     attr_reader :load_tags
 
     # Tag table in the form of `class => tag`.
     #
-    # TODO: Technically this is wrong, as more than one tag can map to the same class.
-    #       This should be changed to any array of tags. Presently only the last tag to
-    #       be defined to map to the class. (Make it the first instead?)
+    # TODO: Technically more than one tag can map to the same class. So we might
+    #       change this to an array of tags. Presently only the last tag to
+    #       be defined is mapped to the class.
     #
     attr_reader :dump_tags
 
     # Add a lazy schema procedure. The procedure does not get called until #resolve!
     # is called. This happend when #find in utilized, for instance.
     #
-    # TODO: Need a name for this method.
+    # TODO: Need a better name for this method ?
     #
-    def __(&block)
+    def apply(&block)
       @blocks << block
     end
 
@@ -60,27 +65,29 @@ module Psych
     def find(otag)
       return nil, nil unless otag
 
+      mtag = normalize_tag(otag)
+
       resolve!  # Ah, the beauty of lazy evaluation.
 
       md = nil
       tag, type = tags.find do |t, _|
         if Regexp === t
-          md = t.match(otag)
+          md = t.match(mtag)
         else
-          t == otag
+          t == mtag #|| t.sub('tag:','!') == mtag
         end
       end
 
-      # TODO: Will this be okay? It means using a block to instantiate a tag type is completely deprecated.
-      #       Instead the block must return a class. So all tags must be associated with a class, though more
-      #       then one tag can be associated with the same class.
+      # This is the biggest API change (2.x+). It means using a block to *instantiate* a tag type
+      # is completely deprecated. Instead, the block must return a class. So all tags must be
+      # associated with a class, though more then one tag can be associated with the same class.
       if Proc === type
-        type = type.call(otag, md)
+        type = (Regexp === tag ? type.call(tag, md) : type.call(tag))
         raise ArgumentError, "not a class -- `#{type}'" unless Class === type
       end
 
       if (Symbol === type || String === type)
-        type = resolve_class(type)  # TODO: Does lookup need to be relative to the block's binding?
+        type = resolve_class(type)
       end
 
       return tag, type
@@ -130,20 +137,35 @@ module Psych
     # block  - A procedure the resolves to a class (use instead of `type`).
     #
     def domain_tag(domain, name, type=nil, &block)
-      tag = ['tag', domain, name].join ':'
+      tag = "tag:#{domain}:#{name}"
       tag(tag, type, &block)
+      #tag("tag:#{name}", type, &block)  # deprecated this shortcut, with schemas
+                                         # the user needs to be explicit.
     end
 
-    # Define a new YAML tag.
+    # Deprecated: Define a new offical YAML tag.
     #
-    # TODO: This probably should never be used by the end user.
+    # This probably should never be used by the end user!!!
     #
     # name  - Name of built-in type. [#to_s]
     # type  - Class to which this tag maps.
     # block - A procedure the resolves to a class (use instead of `type`).
     #
     def builtin_tag(name, type=nil, &block)
-      tag = ['tag', 'yaml.org,2002', name].join ':'
+      tag = "tag:yaml.org,2002:#{name}"
+      tag(tag, type, &block)
+    end
+
+    # Deprecated: Define a new offical Ruby tag.
+    #
+    # This should never be used by the end user!!!
+    #
+    # name  - Name of built-in type. [#to_s]
+    # type  - Class to which this tag maps.
+    # block - A procedure the resolves to a class (use instead of `type`).
+    #
+    def ruby_tag(name, type=nil, &block)
+      tag = "tag:ruby.yaml.org,2002:#{name}"
       tag(tag, type, &block)
     end
 
@@ -161,15 +183,19 @@ module Psych
     # Absorb the tags of another TagSet object. Current tags take
     # precedence over the added tags.
     #
-    # TODO: Good question here, is order well maintained by #merge?
+    # TODO: Good question here, is order well maintained by #merge? Mot so sure!
+    #       Mehtod #reverse_merge is used in hopes that will do the right thing.
+    #       But if not, we have two choices: Either use an Array instead of a
+    #       Hash (slow) or support a list of Schema for the Schema option (maybe kind of sucks).
     #
     # other - Another schema instance. [Schema]
     #
     def absorb(other)
       raise ArgumentError unless Schema === other
-      @blocks    = other.blocks + @blocks
-      @load_tags = other.load_tags.merge(load_tags)
-      @dump_tags = other.dump_tags.merge(dump_tags)
+      @blocks     = @blocks + other.blocks
+      @directives = directives.reverse_merge(other.directives)
+      @load_tags  = load_tags.reverse_merge(other.load_tags)
+      @dump_tags  = dump_tags.reverse_merge(other.dump_tags)
     end
 
     # Add this Schema with another Schema producing a new Schema.
@@ -187,13 +213,23 @@ module Psych
     # Helper method to convert `name` to a class. This actually
     # just calls `Psych.resolve_class`.
     #
-    # TODO: Do we need to pass binding for proper lookup?
-    #
     # name - The name of a class. [Symbol,String]
     #
     # Returns the resolved class, or nil if not resolved. [Class,nil]
     def resolve_class name
-      Psych.resolve_class name
+      #Psych.resolve_class name
+      return nil unless name and not name.empty?
+      retried = false
+      begin
+        path2class(name)  # Ruby 2.0: Object.const_get(name) ?
+      rescue ArgumentError, NameError => ex
+        unless retried
+          name    = "Struct::#{name}"
+          retried = ex
+          retry
+        end
+        raise retried
+      end
     end
 
   protected
@@ -213,22 +249,33 @@ module Psych
       return nil unless tag
       return tag if Regexp === tag
 
-      tag = tag.to_s
-      tag = tag.sub(/(,\d+)\//, '\1:') if String === tag
+      # Local tags that start with `!tag:` treat as domain tags.
+      # TODO: Technically, there is no reason to do this except that's how
+      # it has been working. It is doubtul anyone has ever used it.
+      if tag =~ /^[!\/]?tag\:/
+        tag = tag.sub(/^[!\/]*/, '')
+      end
 
-      # How to handle regex in this case ?
-      @directives.each do |handle, prefix|
-        if tag.start_with?(handle)
-          return tag.sub(handle, prefix)
+      # For domain tags only, replace slash after a date with a colon.
+      # TODO: Again, technically not necessary.
+      if tag.start_with?('tag:')
+        tag = tag.sub(/(,\d+)\//, '\1:')
+      end
+
+      # How to handle regex in this case? Maybe we have to match with directives after the fact, in #find.
+      if tag.start_with?('!')
+        @directives.each do |handle, prefix|
+          if tag.start_with?(handle)
+            return tag.sub(handle, prefix)
+          end
         end
       end
 
-      # TODO: this correct?
       if tag.start_with?('!!')
-        return ['tag', 'yaml.org,2002', tag.sub('!!', '')].join ':'
+        tag = ['tag', 'yaml.org,2002', tag.sub('!!', '')].join ':'
       end
 
-      tag
+      return tag
     end
 
   end
