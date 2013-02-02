@@ -21,6 +21,7 @@ module Psych
         @ss       = ss
         @options  = options
         @coders   = []
+        @schema   = options[:schema] || Psych.global_schema
 
         @dispatch_cache = Hash.new do |h,klass|
           method = "visit_#{(klass.name || '').split('::').join('_')}"
@@ -114,7 +115,7 @@ module Psych
       end
 
       def visit_Object o
-        tag = Psych.global_tags.dump_tags[o.class]
+        tag = @schema.dump_tags[o.class]
         unless tag
           klass = o.class == Object ? nil : o.class.name
           tag   = ['!ruby/object', klass].compact.join(':')
@@ -416,7 +417,7 @@ module Psych
 
       def dump_coder o
         @coders << o
-        tag = Psych.global_tags.dump_tags[o.class]
+        tag = @schema.dump_tags[o.class]
         unless tag
           klass = o.class == Object ? nil : o.class.name
           tag   = ['!ruby/object', klass].compact.join(':')
