@@ -7,6 +7,8 @@ require 'psych/tree_builder'
 require 'psych/parser'
 require 'psych/omap'
 require 'psych/set'
+require 'psych/binary'
+require 'psych/boolean'
 require 'psych/coder'
 require 'psych/core_ext'
 require 'psych/deprecated'
@@ -285,7 +287,7 @@ module Psych
   #   end
   #   list # => ['foo', 'bar']
   #
-  def self.load_stream yaml, options
+  def self.load_stream yaml, options={}
     filename = (String === options ? options : options[:filename])
     if block_given?
       parse_stream(yaml, filename) do |node|
@@ -299,49 +301,57 @@ module Psych
   ###
   # Load the document contained in +filename+.  Returns the yaml contained in
   # +filename+ as a ruby object
-  def self.load_file filename, options
+  def self.load_file filename, options={}
     options[:filename] = filename
     File.open(filename, 'r:bom|utf-8') { |f| self.load f, options }
   end
 
-  # :stopdoc:
-  @global_tags = DEFAULT_SCHEMA #Schema.new
+  # TODO: Rename global_schema to default_schema ?
 
-  # Deprecated: Global type definitions are not a good idea.
-
-  def self.add_domain_type domain, type_tag, &block
-    tag = ['tag', domain, type_tag].join ':'
-    @global_tags.add(tag, block)
-    @global_tags.add("tag:#{tag}", block)
+  #
+  def self.reset_schema!
+    @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
   end
 
-  def self.add_builtin_type type_tag, &block
-    domain = 'yaml.org,2002'
-    tag = ['tag', domain, type_tag].join ':'
-    @global_tags.add(tag, block)
+  # :stopdoc:
+  @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
+
+  # Global type definitions are not a good idea!
+
+  # Since 2.0.0 block must return a class.
+  def self.add_domain_type domain, name, type=nil, &block
+    @global_schema.domain_tag(domain, name, type, &block)
+    #tag = ['tag', domain, type_tag].join ':'
+    #@global_tags.add(tag, block)
+    #@global_tags.add("tag:#{tag}", block)
+  end
+
+  # Since 2.0.0 block must return a class.
+  def self.add_builtin_type name, type=nil, &block
+    @global_schema.builtin_tag(name, type, &block)
+    #domain = 'yaml.org,2002'
+    #tag = ['tag', domain, type_tag].join ':'
+    #@global_tags.add(tag, block)
+  end
+
+  # Since 2.0.0 block must return a class.
+  def self.add_tag tag, klass=nil, &block
+    @global_schema.tag(tag, klass, &block)
   end
 
   def self.remove_type tag
-    @global_tags.remove tag
-  end
-
-  def self.add_tag tag, klass
-    @global_tags.add(tag, klass)
-  end
-
-  # TODO: temporary for debuging
-  def self.log(*objs)
-    $stderr.puts objs.inspect
+    @global_schema.remove_tag tag
   end
 
   class << self
-     attr_accessor :global_tags
-  #  attr_accessor :load_tags
-  #  attr_accessor :dump_tags
-  #  attr_accessor :domain_types
+     attr_accessor :global_schema
+     #attr_accessor :load_tags
+     #attr_accessor :dump_tags
+     #attr_accessor :domain_types
   end
   # :startdoc:
 
+=begin
   # Helper method to convert +klassname+ to a class.
   def self.resolve_class klassname
     return nil unless klassname and not klassname.empty?
@@ -350,8 +360,8 @@ module Psych
     retried = false
 
     begin
-      #path2class(klassname)
-      klassname.split('::').inject(Object) { |k,n| k.const_get n }
+      path2class(name)
+      #klassname.split('::').inject(Object) { |k,n| k.const_get n }
     rescue ArgumentError, NameError => ex
       unless retried
         name    = "Struct::#{name}"
@@ -361,5 +371,6 @@ module Psych
       raise retried
     end
   end
+=end
 
 end
