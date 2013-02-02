@@ -1,3 +1,5 @@
+/* DEPRECATED: Methods are now in Schema. */
+
 #include <psych.h>
 
 VALUE cPsychVisitorsToRuby;

@@ -28,7 +28,7 @@ void Init_psych()
 
     Init_psych_parser();
     Init_psych_emitter();
-    Init_psych_to_ruby();
+    Init_psych_schema();
     Init_psych_yaml_tree();
 }
 /* vim: set noet sws=4 sw=4: */
