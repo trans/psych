@@ -20,7 +20,7 @@ module Psych
         super()
         @st = {}
         @ss = options[:ss] || ScalarScanner.new
-        @schema = options[:schema] || DEFAULT_SCHEMA
+        @schema = options[:schema] || Psych.global_schema
         @schema.resolve!
       end
 
@@ -29,11 +29,11 @@ module Psych
       end
 
       def visit_Psych_Nodes_Sequence o
-        deserialize(o, :sequence)
+        deserialize(o, :seq)
       end
 
       def visit_Psych_Nodes_Mapping o
-        deserialize(o, :mapping)
+        deserialize(o, :map)
       end
 
       def visit_Psych_Nodes_Document o
@@ -81,10 +81,12 @@ module Psych
         #  return instance
         #end
 
-        # Just becuase it is quoted doesn't mean it doesn't have a type! Right?
-        #return o.value if o.quoted  # literal string
+        # Just becuase it is quoted doesn't mean it doesn't have a type, does it?
+        return o.value if kind == :scalar && o.quoted && !o.tag  # literal string
 
-        if o.tag && o.tag.start_with?('!ruby')
+        #return @ss.tokenize(o.value) if kind == :scalar && !o.tag 
+
+        if o.tag && o.tag.start_with?('!ruby/')
           resolve_ruby_tag(o, kind)
         else
           resolve_tag(o, kind)
@@ -93,53 +95,53 @@ module Psych
 
       # Resolve a node based on its tag.
       #
-      # Returns nil if there is no tag, or if there was not type assigned to the tag.
-      def resolve_tag o, kind=:scalar
-        type = resolve_type(o, kind)
+      # Returns nil if there is no tag, or if there was no type assigned to the tag.
+      def resolve_tag node, kind=:scalar
+        tag, type = resolve_type(node, kind)
 
         case type
         when Class
-          if type.method_defined?(:yaml_initialize)
-            instance = register o, type.allocate
-            value = resolve_value(o, kind)
-            instance.yaml_initialize(value)
+          if type.method_defined?(:init_with)
+            instance = register node, type.allocate
+            coder = make_coder(node, kind)
+            instance.init_with(coder)
           else
-            value = resolve_value(o, kind)
-            instance = type.yaml_new(value)
+            coder = make_coder(node, kind)
+            instance = register node, type.new_with(coder)
           end
-        #when Proc  # TODO: do we really want this at all ?
-        #  instance = type.call(o.tag, o.value)  # or just (o) ?
-        #  register o, instance
+        #when Proc  # Deprecated!
+        #  instance = type.call(node.tag, node.value)  # or just (node) ?
+        #  register node, instance
         else
-          instance = @ss.tokenize(o.value)
-          register o, instance
+          instance = @ss.tokenize(node.value)
+          register node, instance
         end
 
-        instance.yaml_tag = o.tag if instance && o.tag
+        instance.yaml_tag = tag if instance && tag
 
         instance
       end
 
+      # Resolve a Ruby tag.
       #
-      def resolve_ruby_tag(o, kind)
-        type = resolve_type(o, kind)
+      def resolve_ruby_tag(node, kind)
+        tag, type = resolve_type(node, kind)
 
-        if type.method_defined?(:yaml_initialize)
-          instance = register o, type.allocate
-          value = resolve_value(o, kind)
-          val = (Hash === value ? value['internal'] : value)
-          instance.yaml_initialize(val)
+        case type
+        when Class
+          if type.method_defined?(:init_with)
+            instance = register node, type.allocate
+            coder = make_coder(node, kind)
+            instance.init_with(coder)
+          else
+            coder = make_coder(node, kind)
+            instance = register node, type.new_with(coder)
+          end
         else
-          value = resolve_value(o, kind)
-          val = (Hash === value ? value['internal'] : value)
-          instance = type.yaml_new(val)
+          raise NameError, "unknown tag type #{tag}"
         end
 
-        if Hash === value
-          value['ivars'].each{ |k,v| instance.instance_variable_set("#{k}", v) }
-        end
-
-        instance.yaml_tag = o.tag if instance
+        instance.yaml_tag = node.tag if instance #&& tag
 
         instance
       end
@@ -153,10 +155,12 @@ module Psych
       def resolve_type(o, kind)
         if o.tag
           tag, type = @schema.find(o.tag)
-        else
-          type = {:scalar=>nil, :sequence=>Array, :mapping=>Hash}[kind]
         end
-        return type
+        unless type
+          tag  = o.tag
+          type = {:scalar=>nil, :seq=>Array, :map=>Hash}[kind]
+        end
+        return tag, type
       end
 
       # Resolve value based on node kind.
@@ -168,9 +172,9 @@ module Psych
         case kind
         when :scalar
           value = o.tag ? o.value : @ss.tokenize(o.value)
-        when :sequence
+        when :seq
           value = o.children.map { |c| accept c }
-        when :mapping
+        when :map
           hash = {}
           o.children.each_slice(2) do |k,v|
             key = accept(k)
@@ -312,8 +316,6 @@ module Psych
         end
       end
 
-
-
 =begin
       def register_empty object
         list = register(object, [])
@@ -389,23 +391,21 @@ module Psych
       end
 =end
 
-      # Convert +klassname+ to a Class
-      def resolve_class klassname
-        return nil unless klassname and not klassname.empty?
-
-        name    = klassname
-        retried = false
-
-        begin
-          path2class(name)
-        rescue ArgumentError, NameError => ex
-          unless retried
-            name    = "Struct::#{name}"
-            retried = ex
-            retry
-          end
-          raise retried
+      # Make Coder.
+      def make_coder(node, kind)
+        coder = Psych::Coder.new(node.tag, @ss)
+        case kind
+        when :scalar
+          coder.scalar = resolve_value(node, kind)
+        when :map
+          coder.map = resolve_value(node, kind)
+        when :seq
+          coder.seq = resolve_value(node, kind)
+        else
+          # TODO: How is this possible?
+          #coder.object = resolve_value(node, kind)
         end
+        coder
       end
 
     end

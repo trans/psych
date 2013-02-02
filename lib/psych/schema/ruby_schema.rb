@@ -11,17 +11,6 @@ module Psych
   #
   # TODO: Fix Complex and Rational to use built-in tag schema.
   #
-  # TODO: In bigdecimal.rb
-  #     def self.yaml_new(value)
-  #       BigDecimal._load value
-  #     end
-  #
-  # TODO: In date.rb
-  #     def self.yaml_new(value)
-  #       # But how to get as @ss ?
-  #       ss.parse_time(o.value).to_datetime
-  #     end
-  #
   RUBY_SCHEMA = Schema.new do |s|
 
     # built-in class
@@ -38,7 +27,9 @@ module Psych
     s.tag '!ruby/float', Float
     s.tag '!ruby/complex', Complex
     s.tag '!ruby/rational', Rational
+    s.tag '!ruby/exception', Exception
     s.tag '!ruby/object', Object
+
 
     # Deprecate
     s.tag '!ruby/object:Complex', Complex
@@ -60,8 +51,9 @@ module Psych
       s.resolve_class(md[1])
     end
 
-    # TODO: Deprecate these? There is really no reason for these anymore, but we
-    # need to change the tags the classes are emitting first.
+    # TODO: Deprecate eventually. There is no need to have `string`, `array`
+    #       or `hash` in the subclass names anymore, but we need to change
+    #       the tags the emitter puts out first.
 
     s.tag /^!ruby\/string:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])
@@ -77,11 +69,11 @@ module Psych
 
     # FIXME: this probably won't work
     s.tag /^!ruby\/sym(bol)?:(.*?)$/ do |tag, md|
-p [tag, md]
       s.resolve_class(md[1])  #md[2]?
     end
 
-    # TODO: Deprecate these too? More tags that are probably unnecessary.
+    # TODO: Deprecate the following three "shortcuts". The emitter should be using
+    #       !ruby/string, !ruby/array and !ruby/hash for these, yes?
 
     s.tag /^!str:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])
@@ -113,7 +105,7 @@ p [tag, md]
 
     # String subclass
     s.tag /^!(?:str|ruby\/string)(?::(.*))?/ do
-      klass = resolve_class($1)
+      klass = s.resolve_class($1)
       if klass
         klass.allocate.replace value
       else
@@ -123,7 +115,7 @@ p [tag, md]
 
     # Array subclass
     s.tag /^!ruby\/array:(.*)$/ do |tag, value|
-      klass = ts.resolve_class($1)
+      klass = s.resolve_class($1)
       list  = register(o, klass.allocate)
 
       #members = Hash[o.children.map { |c| accept c }.each_slice(2).to_a]
@@ -136,7 +128,7 @@ p [tag, md]
 
     # Hash subclass
     s.tag /^!map:(.*)$/, /^!ruby\/hash:(.*)$/ do
-      revive_hash resolve_class($1).new, o
+      revive_hash s.resolve_class($1).new, o
     end
 
     # Symbol subclass

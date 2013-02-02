@@ -4,29 +4,19 @@ module Psych
   JSON_SCHEMA = Schema.new do |s|
 
     # tag:yaml.org,2002:float
-    s.tag '!!float' do |tag, value|
-      value  # TODO: string scanner takes care of it?
-    end
+    s.tag '!!float', Float
 
     # tag:yaml.org,2002:int
-    s.tag '!!int' do |tag, value|
-      value  # TODO: string scanner takes care of it?
-    end
+    s.tag '!!int', Integer
 
     # tag:yaml.org,2002:null
-    s.tag '!!null' do |tag, value|
-      nil
-    end
+    s.tag '!!null', NilClass
 
     # tag:yaml.org,2002:bool
-    s.tag '!!bool' do |tag, value|
-      !!value
-    end
+    s.tag '!!bool', Psych::Boolean
 
     # tag:yaml.org,2002:binary
-    s.tag '!!binary' do |tag, value|
-      value.unpack('m').first
-    end
+    s.tag '!!binary', Psych::Binary
 
     # tag:yaml.org,2002:omap
     s.tag '!!omap', Psych::Omap
