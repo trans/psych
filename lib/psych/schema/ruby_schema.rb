@@ -3,55 +3,28 @@ module Psych
   # The set of Ruby tags.
   #
   # QUERY: Shouldn't Ruby have it's own domain tag? e.g.
-  #        `!tag:ruby-lang.org,1996:String`. The date might
-  #        be useful in case a future version of the class
-  #        changes it's representation.
-  #
-  # QUERY: Should BigDecimal and DateTime use the "built-in" tag schema?
+  #        `!<tag:ruby-lang.org,1996:String>`.
   #
   # TODO: Fix Complex and Rational to use built-in tag schema.
   #
   RUBY_SCHEMA = Schema.new do |s|
 
-    # built-in class
-    s.tag '!ruby/string', String
-    s.tag '!ruby/array', Array
-    s.tag '!ruby/hash', Hash
-    s.tag '!ruby/symbol', Symbol
-    s.tag '!ruby/sym', Symbol   # deprecate
-    s.tag '!ruby/range', Range
-    s.tag "!ruby/regexp", Regexp
-    s.tag '!ruby/class', Class
-    s.tag '!ruby/module', Module
-    s.tag '!ruby/fixnum', Fixnum
-    s.tag '!ruby/float', Float
-    s.tag '!ruby/complex', Complex
-    s.tag '!ruby/rational', Rational
-    s.tag '!ruby/exception', Exception
-    s.tag '!ruby/object', Object
+    # TODO: Deprecate the following three "shortcuts". The emitter should
+    #       be using `!ruby/` tags.
 
-
-    # Deprecate
-    s.tag '!ruby/object:Complex', Complex
-    s.tag '!ruby/object:Rational', Rational
-
-    # exceptions
-    s.tag /^!ruby\/exception:?(.*)?$/ do |tag, md|  # value?
+    s.tag /^!str:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])
     end
 
-    # other classes
-    s.tag /^!ruby\/object:(.*?)$/ do |tag, md|  # value?
+    s.tag /^!seq:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])
     end
 
-    # TODO: Not sure about struct, if we need this or not (see next todo note).
-
-    s.tag /^!ruby\/struct:(.*?)$/ do |tag, md|
+    s.tag /^!map:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])
     end
 
-    # TODO: Deprecate eventually. There is no need to have `string`, `array`
+    # TODO: Deprecate the following. There is no need to have `string`, `array`
     #       or `hash` in the subclass names anymore, but we need to change
     #       the tags the emitter puts out first.
 
@@ -67,26 +40,47 @@ module Psych
       s.resolve_class(md[1])
     end
 
-    # FIXME: this probably won't work
+    # FIXME: this probably won't work anyway
     s.tag /^!ruby\/sym(bol)?:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])  #md[2]?
     end
 
-    # TODO: Deprecate the following three "shortcuts". The emitter should be using
-    #       !ruby/string, !ruby/array and !ruby/hash for these, yes?
-
-    s.tag /^!str:(.*?)$/ do |tag, md|
+    # TODO: Not sure about struct, if we need this or not (see next todo note).
+    s.tag /^!ruby\/struct:(.*?)$/ do |tag, md|
       s.resolve_class(md[1])
     end
 
-    s.tag /^!seq:(.*?)$/ do |tag, md|
+    # exceptions
+    s.tag /^!ruby\/exception:(.*)?$/ do |tag, md|  # value?
+      s.resolve_class(md[1]) || ::Exception
+    end
+
+    # other classes
+    s.tag /^!ruby\/object:(.*?)$/ do |tag, md|  # value?
       s.resolve_class(md[1])
     end
 
-    s.tag /^!map:(.*?)$/ do |tag, md|
-      s.resolve_class(md[1])
-    end
+    # Deprecate: These are built-in class.
+    s.tag '!ruby/object:Complex', Complex
+    s.tag '!ruby/object:Rational', Rational
 
+    # built-in class
+    s.tag '!ruby/string', String
+    s.tag '!ruby/array', Array
+    s.tag '!ruby/hash', Hash
+    s.tag '!ruby/symbol', Symbol
+    s.tag '!ruby/sym', Symbol   # deprecate
+    s.tag '!ruby/range', Range
+    s.tag "!ruby/regexp", Regexp
+    s.tag '!ruby/class', Class
+    s.tag '!ruby/module', Module
+    s.tag '!ruby/fixnum', Fixnum
+    s.tag '!ruby/float', Float
+    s.tag '!ruby/complex', Complex
+    s.tag '!ruby/rational', Rational
+    s.tag '!ruby/exception', ::Exception
+    s.tag '!ruby/struct', Struct
+    s.tag '!ruby/object', Object
 
 =begin
     # Object
@@ -129,11 +123,6 @@ module Psych
     # Hash subclass
     s.tag /^!map:(.*)$/, /^!ruby\/hash:(.*)$/ do
       revive_hash s.resolve_class($1).new, o
-    end
-
-    # Symbol subclass
-    s.tag /^!ruby\/sym(bol)?:?(.*)?$/ do |tag, value|
-      value.to_sym
     end
 =end
 
