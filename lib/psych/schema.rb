@@ -1,6 +1,6 @@
-module Psych
+require 'psych/tag'
 
-# FIXME: FUCK! TAG ORDER IS NOT BEING HONORED. HAVE TO REFACTOR!!!
+module Psych
 
   ###
   # TagTypes maps a set of tags to a set of classes or procedures
@@ -18,7 +18,7 @@ module Psych
     #                 substitution.
     #
     def initialize(options={}, &block)
-      @load_tags = {}
+      @load_tags = []
       @dump_tags = {}
 
       @directives = options[:directives] || {}
@@ -69,28 +69,22 @@ module Psych
 
       resolve!  # Ah, the beauty of lazy evaluation.
 
-      md = nil
-      tag, type = tags.find do |t, _|
-        if Regexp === t
-          md = t.match(mtag)
-        else
-          t == mtag #|| t.sub('tag:','!') == mtag
-        end
+      type = nil
+      tag = tags.find do |t|
+        type = t.match?(mtag)
       end
 
-      # This is the biggest API change (2.x+). It means using a block to *instantiate* a tag type
-      # is completely deprecated. Instead, the block must return a class. So all tags must be
-      # associated with a class, though more then one tag can be associated with the same class.
-      if Proc === type
-        type = (Regexp === tag ? type.call(tag, md) : type.call(tag))
-        raise ArgumentError, "not a class -- `#{type}'" unless Class === type
-      end
+      return nil, nil unless tag
 
       if (Symbol === type || String === type)
         type = resolve_class(type)
       end
 
-      return tag, type
+      # Legacy tags can match on multiple tags for one defined tag. So,
+      # accoding to test specs, we need to use the defined tag.
+      mtag = tag.tag if tag.legacy? && !tag.regexp?
+
+      return mtag, type
     end
 
     # Map of resolved tags, in the form of `tag => class`.
@@ -107,12 +101,13 @@ module Psych
     # type  - Class to which the tag maps. [Class]
     # block - A procedure the resolves to a class (use instead of `type`).
     #
+    # Returns fully qualified tag name.
     def tag(tag, type=nil, &block)
       tag = normalize_tag(tag)
 
       if block
         raise ArgumentError, "2 for 1" if type
-        @load_tags[tag] = block
+        @load_tags.unshift(Tag.new(tag, &block))
       else
         # We could support symbol/string names, but they are so ugly.
         # If lazy evaluation suffices, we can leave this out.
@@ -122,10 +117,25 @@ module Psych
         #  # TODO: does it make sense to add symbol/string to dump_tags ?
         #  @dump_tags[type.to_sym] = tag
         #else
-          @load_tags[tag]  = type
+          @load_tags.unshift(Tag.new(tag, type))
           @dump_tags[type] = tag
         #end
       end
+    end
+
+    # Define a new Tag URI compliant tag. Given a domain, year and a name
+    # a standard Tag URI definition is created, e.g. `tag:domain,yeat:name`.
+    #
+    # domain - Domain name to use in tag.
+    # year   - The year the domain was established.
+    # name   - Name of a domain type. [#to_s]
+    # type   - Class to which this tag maps.
+    # block  - A procedure the resolves to a class (use instead of `type`).
+    #
+    # Returns fully qualified tag name.
+    def taguri(domain, year, name, type=nil, &block)
+      tag = "tag:#{domain},#{Integer(year)}:#{name}"
+      tag(tag, type, &block)
     end
 
     # Define a new domain tag. Given a domain and a name a standard
@@ -136,11 +146,10 @@ module Psych
     # type   - Class to which this tag maps.
     # block  - A procedure the resolves to a class (use instead of `type`).
     #
+    # Returns fully qualified tag name.
     def domain_tag(domain, name, type=nil, &block)
       tag = "tag:#{domain}:#{name}"
       tag(tag, type, &block)
-      #tag("tag:#{name}", type, &block)  # deprecated this shortcut, with schemas
-                                         # the user needs to be explicit.
     end
 
     # Deprecated: Define a new offical YAML tag.
@@ -151,51 +160,108 @@ module Psych
     # type  - Class to which this tag maps.
     # block - A procedure the resolves to a class (use instead of `type`).
     #
+    # Returns fully qualified tag name.
     def builtin_tag(name, type=nil, &block)
       tag = "tag:yaml.org,2002:#{name}"
       tag(tag, type, &block)
     end
 
-    # Deprecated: Define a new offical Ruby tag.
+    ## Deprecated: Define a new offical Ruby tag.
+    ##
+    ## This should never be used by the end user!!!
+    ##
+    ## name  - Name of built-in type. [#to_s]
+    ## type  - Class to which this tag maps.
+    ## block - A procedure the resolves to a class (use instead of `type`).
+    ##
+    ## Returns fully qualified tag name.
+    #def ruby_tag(name, type=nil, &block)
+    #  tag = "tag:ruby.yaml.org,2002:#{name}"
+    #  tag(tag, type, &block)
+    #end
+
+    # Add an *instance* tag. It is not the recommended approach
+    # to adding tags. It is better to define your own class and use #tag.
     #
-    # This should never be used by the end user!!!
+    # Returns fully qualified tag name.
+    def instance_tag(tag, &block)
+      klass = Class.new
+      klass.singleton_class.module_eval do
+        define_method(:new_with) do |coder|
+          block.call(coder.tag, coder.value)
+        end
+      end
+      tag(tag, klass)
+    end
+
+    # Deprecated: Add a legacy *instance* tag.
     #
-    # name  - Name of built-in type. [#to_s]
-    # type  - Class to which this tag maps.
+    # Returns fully qualified tag name.
+    def legacy_instance_tag(tag, &block)
+      klass = Class.new
+      klass.singleton_class.module_eval do
+        define_method(:new_with) do |coder|
+          block.call(coder.tag, coder.value)
+        end
+      end
+      legacy_tag(tag, klass)
+    end
+
+    # Deprecated: Define a legacy tag.
+    #
+    # tag   - Valid YAML tag. [String]
+    # type  - Class to which the tag maps. [Class]
     # block - A procedure the resolves to a class (use instead of `type`).
     #
-    def ruby_tag(name, type=nil, &block)
-      tag = "tag:ruby.yaml.org,2002:#{name}"
-      tag(tag, type, &block)
+    # Returns fully qualified tag name.
+    def legacy_tag(tag, type=nil, &block)
+      tag = normalize_tag(tag)
+
+      if block
+        raise ArgumentError, "2 for 1" if type
+        @load_tags.unshift(LegacyTag.new(tag, &block))
+      else
+        # We could support symbol/string names, but they are so ugly.
+        # If lazy evaluation suffices, we can leave this out.
+        #case type
+        #when Symbol,String
+        #  @load_tags[tag] = type  #lambda{ resolve_class(type) }
+        #  # TODO: does it make sense to add symbol/string to dump_tags ?
+        #  @dump_tags[type.to_sym] = tag
+        #else
+          @load_tags.unshift(LegacyTag.new(tag, type))
+          @dump_tags[type] = tag
+        #end
+      end
     end
+    private :legacy_tag
 
     # Remove tag from schema.
     #
     # tag - Valid YAML tag. [String]
     #
     def remove_tag(tag)
-      tag = normalize_tag(tag)
+      mtag = normalize_tag(tag)
 
-      @dump_tags.delete(@load_tags[tag])
-      @load_tags.delete(tag)
+      target = @load_tags.find{ |t| mtag == t.tag  }
+
+      @dump_tags.delete(target.type)
+      @load_tags.delete(target)
     end
 
-    # Absorb the tags of another TagSet object. Current tags take
-    # precedence over the added tags.
-    #
-    # TODO: Good question here, is order well maintained by #merge? Mot so sure!
-    #       Mehtod #reverse_merge is used in hopes that will do the right thing.
-    #       But if not, we have two choices: Either use an Array instead of a
-    #       Hash (slow) or support a list of Schema for the Schema option (maybe kind of sucks).
+    # Absorb the tags of another TagSet object. Current tags take precedence
+    # over the absorbed tags.
     #
     # other - Another schema instance. [Schema]
     #
     def absorb(other)
       raise ArgumentError unless Schema === other
-      @blocks     = @blocks + other.blocks
-      @directives = directives.reverse_merge(other.directives)
-      @load_tags  = load_tags.reverse_merge(other.load_tags)
-      @dump_tags  = dump_tags.reverse_merge(other.dump_tags)
+
+      @blocks     = other.blocks + @blocks
+      @load_tags  = other.load_tags + @load_tags
+
+      @dump_tags  = other.dump_tags.merge @dump_tags
+      @directives = other.directives.merge @directives
     end
 
     # Add this Schema with another Schema producing a new Schema.
@@ -250,17 +316,18 @@ module Psych
       return tag if Regexp === tag
 
       # Local tags that start with `!tag:` treat as domain tags.
+      #
       # TODO: Technically, there is no reason to do this except that's how
-      # it has been working. It is doubtul anyone has ever used it.
+      # it has been working. It is doubtul anyone has ever used it, and
+      # should probably be deprecated.
       if tag =~ /^[!\/]?tag\:/
         tag = tag.sub(/^[!\/]*/, '')
       end
 
       # For domain tags only, replace slash after a date with a colon.
-      # TODO: Again, technically not necessary.
-      if tag.start_with?('tag:')
-        tag = tag.sub(/(,\d+)\//, '\1:')
-      end
+      #if tag.start_with?('tag:')
+      #  tag = tag.sub(/(,\d+)\//, '\1:')
+      #end
 
       # How to handle regex in this case? Maybe we have to match with directives after the fact, in #find.
       if tag.start_with?('!')
