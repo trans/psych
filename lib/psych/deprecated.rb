@@ -38,21 +38,19 @@ module Psych
     ScalarScanner.new.tokenize(thing).class.name.downcase
   end
 
-  def self.add_ruby_type tag, type=nil, &block
-    warn "#{caller[0]}: add_ruby_type is deprecated, use add_domain_type" if $VERBOSE
-    #domain = 'ruby.yaml.org,2002'
-    #key = ['tag', domain, type_tag].join ':'
-    #@domain_types[key] = [key, block]
-    @global_schema.ruby_tag(tag, type, &block)
+  def self.add_ruby_type name, &block
+    warn "#{caller[0]}: add_ruby_type is deprecated, use add_tag" if $VERBOSE
+    tag = "tag:ruby.yaml.org,2002:#{name}"
+    @global_schema.legacy_instance_tag(tag, &block)
   end
 
-  def self.add_private_type tag, type=nil, &block
-    warn "#{caller[0]}: add_private_type is deprecated, use add_domain_type" if $VERBOSE
-    domain = 'x-private'
-    tag = [domain, tag].join ':'
-    @global_schema.tag(tag, type, &block)
+  def self.add_private_type tag, &block
+    warn "#{caller[0]}: add_private_type is deprecated, use add_tag" if $VERBOSE
+    tag = "!x-private:#{tag}"
+    @global_schema.instance_tag(tag, &block)
   end
 
+  # FIXME
   def self.tagurize thing
     warn "#{caller[0]}: add_private_type is deprecated, use add_domain_type" if $VERBOSE
     return thing unless String === thing
