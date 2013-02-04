@@ -603,7 +603,8 @@ EOY
 		assert_equal( doc_ct, 3 )
 	end
 
-	def test_spec_domain_prefix
+	def test_spec_legacy_domain_prefix
+        skip "This is YAML 1.0 tag prefix syntax, and no longer should be supported."
         customer_proc = proc { |type, val|
             if Hash === val
                 scheme, domain, type = type.split( ':', 3 )
@@ -630,6 +631,35 @@ invoice: !domain.tld,2002/invoice
 EOY
 		)
 	end
+
+	def test_spec_domain_prefix
+        customer_proc = proc { |type, val|
+            if Hash === val
+                scheme, domain, type = type.split( ':', 3 )
+                val['type'] = "domain #{type}"
+                val
+            else
+                raise ArgumentError, "Not a Hash in domain.tld,2002/invoice: " + val.inspect
+            end
+        }
+        Psych.add_domain_type( "domain.tld,2002", 'invoice', &customer_proc )
+        Psych.add_domain_type( "domain.tld,2002", 'customer', &customer_proc )
+		assert_parse_only( { "invoice"=> { "customers"=> [ { "given"=>"Chris", "type"=>"domain customer", "family"=>"Dumars" } ], "type"=>"domain invoice" } }, <<EOY
+%TAG ! tag:domain.tld,2002:
+---
+# 'tag:domain.tld,2002:invoice' is some type family.
+invoice: !invoice
+  # '!!seq' is shorthand for 'tag:yaml.org,2002:seq'.
+  customers: !!seq
+    # '!customer' is shorthand for the full
+    # notation 'tag:domain.tld,2002:customer'.
+    - !customer
+      given : Chris
+      family : Dumars
+EOY
+		)
+	end
+
 
 	def test_spec_throwaway
 		assert_parse_only(
@@ -701,7 +731,7 @@ EOY
 	end
 
 	def test_spec_explicit_families
-        Psych.add_domain_type( "somewhere.com,2002", 'type' ) { |type, val|
+        Psych.add_domain_type("somewhere.com,2002", 'type') { |type, val|
             "SOMEWHERE: #{val}"
         }
 		assert_parse_only(
