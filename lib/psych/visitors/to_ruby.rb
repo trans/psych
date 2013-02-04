@@ -48,49 +48,24 @@ module Psych
         @st.fetch(o.anchor) { raise BadAlias, "Unknown alias: #{o.anchor}" }
       end
 
-      # @deprecated Forget those global domain type. So just use super method.
-      def accept target
-        result = super
-        #return result if @schema.domain_types.empty? || !target.tag
-
-        #key = target.tag.sub(/^[!\/]*/, '').sub(/(,\d+)\//, '\1:')
-        #key = "tag:#{key}" unless key =~ /^(tag:|x-private)/
-
-        #if @schema.domain_types.key? key
-        #  value, block = @schema.domain_types[key]
-        #  return block.call value, result
-        #end
-
-        result
-      end
+      #def accept target
+      #  super
+      #end
 
     private
 
       def deserialize o, kind=:scalar
-        ## NOTE: This seems like a whacky way to handle things
-        ##       is this for a special set of classes of something ?
-        #if klass = @schema.load_tags[o.tag]
-        #  instance = klass.allocate
-        #
-        #  if instance.respond_to?(:init_with)
-        #    coder = Psych::Coder.new(o.tag)
-        #    coder.scalar = o.value
-        #    instance.init_with coder
-        #  end
-        #
-        #  return instance
-        #end
-
-        # Just becuase it is quoted doesn't mean it doesn't have a type, does it?
-        return o.value if kind == :scalar && o.quoted && !o.tag  # literal string
-
-        #return @ss.tokenize(o.value) if kind == :scalar && !o.tag 
-
-        if o.tag && o.tag.start_with?('!ruby/')
-          resolve_ruby_tag(o, kind)
-        else
-          resolve_tag(o, kind)
+        if kind == :scalar
+          # Just becuase it is quoted doesn't mean it doesn't have a type, does it?
+          #return register(o, o.value) if o.quoted
+          return register(o, o.value) if o.quoted && !o.tag  # literal string
+          return register(o, @ss.tokenize(o.value)) unless o.tag 
         end
+        resolve_tag(o, kind)
+      end
+
+      def ruby_tag?(o)
+        o.tag && o.tag.start_with?('!ruby/')
       end
 
       # Resolve a node based on its tag.
@@ -101,47 +76,30 @@ module Psych
 
         case type
         when Class
-          if type.method_defined?(:init_with)
+          if type.method_defined?(:init_with) && type != Struct
             instance = register node, type.allocate
-            coder = make_coder(node, kind)
+            coder = make_coder(node, kind, tag)
             instance.init_with(coder)
-          else
-            coder = make_coder(node, kind)
+          elsif type.method_defined?(:yaml_initialize)  # deprecated behavior
+            if $VERBOSE
+              warn "Implementing #{node.class}#yaml_initialize is deprecated, please implement \"init_with(coder)\""
+            end
+            instance = register node, type.allocate
+            coder = make_coder(node, kind, tag)
+            instance.yaml_initialize(tag, coder.value)
+            coder = make_coder(node, kind, tag)
             instance = register node, type.new_with(coder)
           end
         #when Proc  # Deprecated!
         #  instance = type.call(node.tag, node.value)  # or just (node) ?
         #  register node, instance
         else
+          raise NameError, "unknown tag type #{tag}" if ruby_tag?(node)
           instance = @ss.tokenize(node.value)
           register node, instance
         end
 
-        instance.yaml_tag = tag if instance && tag
-
-        instance
-      end
-
-      # Resolve a Ruby tag.
-      #
-      def resolve_ruby_tag(node, kind)
-        tag, type = resolve_type(node, kind)
-
-        case type
-        when Class
-          if type.method_defined?(:init_with)
-            instance = register node, type.allocate
-            coder = make_coder(node, kind)
-            instance.init_with(coder)
-          else
-            coder = make_coder(node, kind)
-            instance = register node, type.new_with(coder)
-          end
-        else
-          raise NameError, "unknown tag type #{tag}"
-        end
-
-        instance.yaml_tag = node.tag if instance #&& tag
+        instance.yaml_tag = node.tag if instance
 
         instance
       end
@@ -156,10 +114,12 @@ module Psych
         if o.tag
           tag, type = @schema.find(o.tag)
         end
+
         unless type
           tag  = o.tag
           type = {:scalar=>nil, :seq=>Array, :map=>Hash}[kind]
         end
+
         return tag, type
       end
 
@@ -372,28 +332,9 @@ module Psych
       end
 =end
 
-=begin
-      def init_with o, h, node
-        c = Psych::Coder.new(node.tag)
-        c.map = h
-
-        if o.respond_to?(:init_with)
-          o.init_with c
-        elsif o.respond_to?(:yaml_initialize)
-          if $VERBOSE
-            warn "Implementing #{o.class}#yaml_initialize is deprecated, please implement \"init_with(coder)\""
-          end
-          o.yaml_initialize c.tag, c.map
-        else
-          h.each { |k,v| o.instance_variable_set(:"@#{k}", v) }
-        end
-        o
-      end
-=end
-
       # Make Coder.
-      def make_coder(node, kind)
-        coder = Psych::Coder.new(node.tag, @ss)
+      def make_coder(node, kind, tag)
+        coder = Psych::Coder.new(tag, @ss) #node.tag, @ss)
         case kind
         when :scalar
           coder.scalar = resolve_value(node, kind)
@@ -403,7 +344,7 @@ module Psych
           coder.seq = resolve_value(node, kind)
         else
           # TODO: How is this possible?
-          #coder.object = resolve_value(node, kind)
+          coder.object = resolve_value(node, kind)
         end
         coder
       end
