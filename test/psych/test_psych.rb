@@ -98,64 +98,34 @@ class TestPsych < Psych::TestCase
     assert_equal %w{ foo bar }, docs.children.map { |x| x.transform }
   end
 
+  # deprecated
   def test_add_builtin_type
-    Psych.add_builtin_type 'omap' do |type|
-      Class.new{ attr :a }
+    got = nil
+    Psych.add_builtin_type 'omap' do |type, val|
+      got = val
     end
-    val = Psych.load("--- !!omap\n  a: hello")
-    assert_equal 'hello', val.a
+    Psych.load('--- !!omap hello')
+    assert_equal 'hello', got
   ensure
-    Psych.remove_type 'omap'
+    # we have to use the expanded name here
+    Psych.remove_tag 'tag:yaml.org,2002:omap'
   end
 
-  def test_add_domain_type_1
-    klass = Class.new do
-      def self.new_with(coder); coder.value; end
-    end
-
+  # deprecated
+  def test_domain_types
     got = nil
-    Psych.add_domain_type 'foo.bar,2002', 'foo' do |tag|
-      got = tag
-      klass
+    Psych.add_domain_type 'foo.bar,2002', 'foo' do |type, val|
+      got = val
     end
 
-    # Without the `tag:` this is just a local tag, not a domain tag.
-    val = Psych.load('--- !<tag:foo.bar,2002/foo> hello')
-    assert_equal 'tag:foo.bar,2002:foo', got
-    assert_equal 'hello', val
-  end
+    Psych.load('--- !foo.bar,2002/foo hello')
+    assert_equal 'hello', got
 
-  def test_add_domain_type_2
-    klass = Class.new do
-      def self.new_with(coder); coder.value; end
-    end
+    Psych.load("--- !foo.bar,2002/foo\n- hello\n- world")
+    assert_equal %w{ hello world }, got
 
-    got = nil
-    Psych.add_domain_type 'foo.bar,2002', 'foo' do |tag|
-      got = tag
-      klass
-    end
-
-    # Without the `tag:` this is just a local tag, not a domain tag.
-    val = Psych.load("--- !<tag:foo.bar,2002/foo>\n- hello\n- world")
-    assert_equal 'tag:foo.bar,2002:foo', got
-    assert_equal %w{ hello world }, val
-  end
-
-  def test_add_domain_type_3
-    klass = Class.new do
-      def self.new_with(coder); coder.value; end
-    end
-
-    got = nil
-    Psych.add_domain_type 'foo.bar,2002', 'foo' do |tag|
-      got = tag
-      klass
-    end
-
-    val = Psych.load("--- !tag:foo.bar,2002/foo\nhello: world")
-    assert_equal 'tag:foo.bar,2002:foo', got
-    assert_equal({ 'hello' => 'world' }, val)
+    Psych.load("--- !foo.bar,2002/foo\nhello: world")
+    assert_equal({ 'hello' => 'world' }, got)
   end
 
   def test_load_file
@@ -185,7 +155,7 @@ class TestPsych < Psych::TestCase
 
   def test_callbacks
     types = []
-    appender = lambda { |tag| types << tag; Class.new(String) }
+    appender = lambda { |*args| types << args }
 
     Psych.add_builtin_type('foo', &appender)
     Psych.add_domain_type('example.com,2002', 'foo', &appender)
@@ -195,8 +165,8 @@ class TestPsych < Psych::TestCase
     eoyml
 
     assert_equal [
-      "tag:yaml.org,2002:foo",
-      "tag:example.com,2002:foo"
+      ["tag:yaml.org,2002:foo", "bar"],
+      ["tag:example.com,2002:foo", "bar"]
     ], types
   end
 end

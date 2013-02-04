@@ -38,7 +38,7 @@ module Psych
 
     def test_recursive_quick_emit
       hash  = { :qe => @qe }
-      hash2 = Psych.load Psych.dump hash
+      hash2 = Psych.load(Psych.dump hash)
       qe    = hash2[:qe]
 
       assert_equal @qe.name, qe.name
@@ -179,7 +179,8 @@ module Psych
 - !x-private:foo bar
       eoyml
 
-      assert_equal [["x-private:foo", "bar"]], types
+      # It has to be `!x-private` not `x-private`.
+      assert_equal [["!x-private:foo", "bar"]], types
     end
 
     def test_tagurize
