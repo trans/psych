@@ -67,16 +67,6 @@ description:
         assert_equal s, ruby
       end
 
-      def test_anon_struct_legacy
-        s = Struct.new(:foo).new('bar')
-
-        mapping = Nodes::Mapping.new nil, '!ruby/struct:'
-        mapping.children << Nodes::Scalar.new('foo')
-        mapping.children << Nodes::Scalar.new('bar')
-
-        assert_equal s.foo, mapping.to_ruby.foo
-      end
-
       def test_anon_struct
         s = Struct.new(:foo).new('bar')
 
@@ -88,7 +78,7 @@ description:
       end
 
       def test_exception
-        exc = Exception.new 'hello'
+        exc = ::Exception.new 'hello'
 
         mapping = Nodes::Mapping.new nil, '!ruby/exception'
         mapping.children << Nodes::Scalar.new('message')
