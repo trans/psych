@@ -6,12 +6,11 @@ class Struct
 
   def init_with(coder)
     coder.map.each do |m, v|
-      #if members.map{ |b| b.to_sym }.include?(m.to_sym)
       if members.include?(m.to_sym)
         send("#{m}=", v)
       else
-        # TODO: Isn't this an error?
-        #members[m.to_s.sub(/^@/, '')] = v
+        iv = m.to_s.start_with?('@') ? m : "@#{m}"
+        instance_variable_set(iv, v)
       end
     end
   end
