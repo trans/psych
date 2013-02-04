@@ -104,9 +104,11 @@ module Psych
   # The version of libyaml Psych is using
   LIBYAML_VERSION = Psych.libyaml_version.join '.'
 
+  # Psych base exception.
   class Exception < RuntimeError
   end
 
+  # Error to raise when an anchor is amiss.
   class BadAlias < Exception
   end
 
@@ -116,9 +118,10 @@ module Psych
   # +filename+ will be used in the exception message if any exception is raised
   # while parsing.
   #
-  # Raises a Psych::SyntaxError when a YAML syntax error is detected.
+  # yaml    - YAML document. [String]
+  # options - Load options. [Hash]
   #
-  # Example:
+  # Examples
   #
   #   Psych.load("--- a")             # => 'a'
   #   Psych.load("---\n - a\n - b")   # => ['a', 'b']
@@ -129,6 +132,10 @@ module Psych
   #     ex.file    # => 'file.txt'
   #     ex.message # => "(file.txt): found character that cannot start any token"
   #   end
+  #
+  # Raises a [Psych::SyntaxError] when a YAML syntax error is detected.
+  #
+  # Returns the object instantiated from the YAML. [Object]
   def self.load yaml, options = {}
     filename = (String === options ? options : options[:filename])
     result = parse(yaml, filename)
@@ -140,9 +147,10 @@ module Psych
   # +filename+ is used in the exception message if a Psych::SyntaxError is
   # raised.
   #
-  # Raises a Psych::SyntaxError when a YAML syntax error is detected.
+  # yaml     - YAML document. [String]
+  # filename - Designated path to YAML document. (optonal) [String] 
   #
-  # Example:
+  # Examples
   #
   #   Psych.parse("---\n - a\n - b") # => #<Psych::Nodes::Sequence:0x00>
   #
@@ -153,7 +161,11 @@ module Psych
   #     ex.message # => "(file.txt): found character that cannot start any token"
   #   end
   #
-  # See Psych::Nodes for more information about YAML AST.
+  # See: Psych::Nodes for more information about YAML AST.
+  #
+  # Raises a Psych::SyntaxError when a YAML syntax error is detected.
+  #
+  # Returns node. [Psych::Node]
   def self.parse yaml, filename = nil
     parse_stream(yaml, filename) do |node|
       return node
@@ -164,7 +176,11 @@ module Psych
   ###
   # Parse a file at +filename+. Returns the YAML AST.
   #
+  # filename - Path to YAML document. [String]
+  #
   # Raises a Psych::SyntaxError when a YAML syntax error is detected.
+  #
+  # Returns node. [Psych::Node]
   def self.parse_file filename
     File.open filename, 'r:bom|utf-8' do |f|
       parse f, filename
@@ -226,7 +242,11 @@ module Psych
   # to control the output format.  If an IO object is passed in, the YAML will
   # be dumped to that IO object.
   #
-  # Example:
+  # o       - Any object. [Object]
+  # io      - IO instance to which to write.
+  # options - Dump options.
+  #
+  # Examples
   #
   #   # Dump an array, get back a YAML string
   #   Psych.dump(['a', 'b'])  # => "---\n- a\n- b\n"
@@ -239,6 +259,8 @@ module Psych
   #
   #   # Dump an array to an IO with indentation set
   #   Psych.dump(['a', ['b']], StringIO.new, :indentation => 3)
+  #
+  # Returns YAML document. [String]
   def self.dump o, io = nil, options = {}
     if Hash === io
       options = io
@@ -253,9 +275,13 @@ module Psych
   ###
   # Dump a list of objects as separate documents to a document stream.
   #
-  # Example:
+  # objects - List of objects. [Array<Object>]
+  #
+  # Examples
   #
   #   Psych.dump_stream("foo\n  ", {}) # => "--- ! \"foo\\n  \"\n--- {}\n"
+  #
+  # Returns YAML stream. [String]
   def self.dump_stream *objects
     visitor = Psych::Visitors::YAMLTree.new {}
     objects.each do |o|
@@ -266,6 +292,10 @@ module Psych
 
   ###
   # Dump Ruby object +o+ to a JSON string.
+  #
+  # o - Any object. [Object]
+  #
+  # Returns JSON document. [String]
   def self.to_json o
     visitor = Psych::Visitors::JSONTree.new
     visitor << o
@@ -277,7 +307,10 @@ module Psych
   # as a list.  If a block is given, each document will be converted to ruby
   # and passed to the block during parsing
   #
-  # Example:
+  # yaml    - Stream of YAML documents. [String]
+  # options - Load options. [Hash]
+  #
+  # Examples
   #
   #   Psych.load_stream("--- foo\n...\n--- bar\n...") # => ['foo', 'bar']
   #
@@ -287,6 +320,7 @@ module Psych
   #   end
   #   list # => ['foo', 'bar']
   #
+  # Returns list of instantiated YAML. [Array<Object>]
   def self.load_stream yaml, options={}
     filename = (String === options ? options : options[:filename])
     if block_given?
@@ -301,76 +335,93 @@ module Psych
   ###
   # Load the document contained in +filename+.  Returns the yaml contained in
   # +filename+ as a ruby object
+  #
+  # filename - Path to YAML file. [String]
+  # options  - Load options. [Hash]
+  #
+  # Returns instantiated YAML. [Object]
   def self.load_file filename, options={}
     options[:filename] = filename
     File.open(filename, 'r:bom|utf-8') { |f| self.load f, options }
   end
 
-  # TODO: Rename global_schema to default_schema ?
-
+  ###
+  # Reset the global schema to `DEFAULT_SCHEMA`.
   #
+  # Returns global schema. [Schema]
   def self.reset_schema!
     @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
   end
 
-  # :stopdoc:
   @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
 
-  # Global type definitions are not a good idea!
-
-  # Since 2.0.0 block must return a class.
-  def self.add_domain_type domain, name, type=nil, &block
-    @global_schema.domain_tag(domain, name, type, &block)
-    #tag = ['tag', domain, type_tag].join ':'
-    #@global_tags.add(tag, block)
-    #@global_tags.add("tag:#{tag}", block)
+  ###
+  # Add a tag to the shared global schema.
+  #
+  # Keep in mind that global tag definitions are not the best
+  # idea! It is better to use a Schema suited to your application.
+  #
+  # tag   - Valid YAML tag are URIs. [String]
+  # type  - Class object, if block not used. [Class]
+  # block - Block must return a class. [Proc]
+  #
+  # Returns tag. [String]
+  def self.tag(tag, type=nil, &block)
+    @global_schema.tag(tag, type, &block)
   end
 
-  # Since 2.0.0 block must return a class.
-  def self.add_builtin_type name, type=nil, &block
-    @global_schema.builtin_tag(name, type, &block)
-    #domain = 'yaml.org,2002'
-    #tag = ['tag', domain, type_tag].join ':'
-    #@global_tags.add(tag, block)
-  end
-
-  # Since 2.0.0 block must return a class.
-  def self.add_tag tag, klass=nil, &block
-    @global_schema.tag(tag, klass, &block)
-  end
-
-  def self.remove_type tag
+  ###
+  # Remove a tag from the global schema.
+  #
+  # tag - Valid YAML tag are URIs. [String]
+  #
+  # Returns tag. [String]
+  def self.remove_tag tag
     @global_schema.remove_tag tag
   end
 
   class << self
+     alias :add_tag :tag
      attr_accessor :global_schema
-     #attr_accessor :load_tags
-     #attr_accessor :dump_tags
-     #attr_accessor :domain_types
+  end
+
+  # :stopdoc:
+  ###
+  # Deprectated: Make your own class and use #tag instead.
+  #
+  # This method creates a legacy tag which matches many different
+  # actual tags for backward compatability.
+  #
+  def self.add_domain_type domain, name, &block
+    tags = []
+    tags << "tag:#{domain}:#{name}"
+    #tags << "tag:#{name}"
+    #tags << "#{domain}:#{name}"
+
+    tags.each do |tag|
+      @global_schema.legacy_instance_tag(tag, &block)
+    end
+
+    tags
+  end
+
+  ###
+  # Deprectated: Make your own class and use #tag instead.
+  def self.add_builtin_type name, &block
+    tag = "tag:yaml.org,2002:#{name}"
+    @global_schema.legacy_instance_tag(tag, &block)
+  end
+
+  ###
+  # Deprecated: Remove a tag from the global schema.
+  #
+  # Note that this doesn't quite work like it did, b/c it now
+  # needs to use the full tag name to remove a legacy type.
+  # e.g. `builtin_type('foo')` => 'tag:yaml.org,2002:foo'
+  #
+  # Returns tag. [String]
+  def self.remove_type tag
+    @global_schema.remove_tag tag
   end
   # :startdoc:
-
-=begin
-  # Helper method to convert +klassname+ to a class.
-  def self.resolve_class klassname
-    return nil unless klassname and not klassname.empty?
-
-    name    = klassname
-    retried = false
-
-    begin
-      path2class(name)
-      #klassname.split('::').inject(Object) { |k,n| k.const_get n }
-    rescue ArgumentError, NameError => ex
-      unless retried
-        name    = "Struct::#{name}"
-        retried = ex
-        retry
-      end
-      raise retried
-    end
-  end
-=end
-
 end
