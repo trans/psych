@@ -91,15 +91,11 @@ module Psych
             coder = make_coder(node, kind, tag)
             instance = register(node, type.new_with(coder))
           else
-            # can we allocate?
-            success = begin
+            begin
               object = type.allocate
-              true
             rescue TypeError
-              false
-            end
-
-            if success
+              raise TypeError, "cannot allocate #{type}. Add #{type}.new_with method."
+            else            
               instance = register node, object
               coder = make_coder(node, kind, tag)
 
@@ -111,10 +107,6 @@ module Psych
               else
                 general_init_with(instance, coder)
               end
-            else
-              raise TypeError, "cannot allocate #{type}. Add #{type}.new_with method."
-              #coder = make_coder(node, kind, tag)
-              #instance = register node, type.new_with(coder)
             end
           end
         else
