@@ -1,7 +1,17 @@
 class Struct
-  def self.new_with(coder)
-    value = coder.map
-    new(*value.map { |k,v| k.to_sym }).new(*value.map { |k,v| v })
+  # FIXME: This feels all sort of hackish. But the problem is that
+  #        subclasses of Struct should use #init_with b/c they
+  #        can use allocate, but Struct itself cannot.
+#  def self.inherited(subclass)
+#    subclass.singleton_class.send(:undef_method, :new_with)
+#  end
+
+  #
+  module Factory
+    def self.new_with(coder)
+      value = coder.map
+      Struct.new(*value.map { |k,v| k.to_sym }).new(*value.map { |k,v| v })
+    end
   end
 
   def init_with(coder)

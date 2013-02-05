@@ -60,9 +60,13 @@ module Psych
       s.resolve_class(md[1])
     end
 
-    # Deprecate: These are built-in class.
-    s.tag '!ruby/object:Complex', Complex
-    s.tag '!ruby/object:Rational', Rational
+    # TODO: These are built-in, so should they not be like the others?
+    #s.tag '!ruby/object:Complex', Complex
+    #s.tag '!ruby/object:Rational', Rational
+
+    # FIXME: Psych has no special tag for actual Struct.
+    # We have to use general tag `!ruby/object:Struct`.
+    s.tag '!ruby/struct', Struct::Factory
 
     # built-in class
     s.tag '!ruby/string', String
@@ -79,8 +83,19 @@ module Psych
     s.tag '!ruby/complex', Complex
     s.tag '!ruby/rational', Rational
     s.tag '!ruby/exception', ::Exception
-    s.tag '!ruby/struct', Struct
     s.tag '!ruby/object', Object
+
+    # Deprecate: Once Bignum defines new_with itself.
+    s.tag '!ruby/object:BigDecimal' do |tag|
+      require 'psych/core_ext/bigdecimal'
+      BigDecimal
+    end
+
+    # Deprecate: Once DateTime defines new_with itself.
+    s.tag '!ruby/object:DateTime' do |tag|
+      require 'psych/core_ext/date'
+      DateTime
+    end
 
 =begin
     # Object
