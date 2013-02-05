@@ -51,15 +51,8 @@ module Psych
   # Returns `tag:<domain>:<name>` tag uri. [String]
   def self.add_domain_type domain, name, &block
     warn "#{caller[0]}: add_domain_type is deprecated" if $VERBOSE
-    tags = []
-    tags << "tag:#{domain}:#{name}"
-    tags << "tag:#{name}"   # This is so bad!
-
-    tags.each do |tag|
-      @global_schema.legacy_instance_tag(tag, &block)
-    end
-
-    tags
+    tag = "tag:#{domain}:#{name}"
+    @global_schema.legacy_instance_tag(tag, &block)
   end
 
   ###
@@ -75,12 +68,24 @@ module Psych
     @global_schema.legacy_instance_tag(tag, &block)
   end
 
+  ###
+  # Deprectated: Just don't.
+  #
+  # name - Name of it. [String]
+  #
+  # Returns `tag:ruby.yaml.org,2002:<name>` tag uri. [String]
   def self.add_ruby_type name, &block
     warn "#{caller[0]}: add_ruby_type is deprecated" if $VERBOSE
     tag = "tag:ruby.yaml.org,2002:#{name}"
     @global_schema.legacy_instance_tag(tag, &block)
   end
 
+  ###
+  # Deprectated: Just don't.
+  #
+  # name - Name of it. [String]
+  #
+  # Returns `!x-private:<name>` tag uri. [String]
   def self.add_private_type tag, &block
     warn "#{caller[0]}: add_private_type is deprecated, use add_tag" if $VERBOSE
     tag = "!x-private:#{tag}"
@@ -97,7 +102,7 @@ module Psych
   # best possible legacy matches it can muster and removes all of them,
   # but it is not 100% equivalent to pre-2.0 behaviour!
   #
-  # TODO: Improve compatibility as much as possible.
+  # TODO: Improve compatability as much as possible.
   #
   # Returns list of tags removed. [Array<String>]
   def self.remove_type tag

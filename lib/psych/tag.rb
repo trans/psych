@@ -112,11 +112,7 @@ module Psych
     #
     # Returns macting type. [Class]
     def match?(tag)
-      type = nil
-      tag_variations(tag).find do |tv|
-        type = type_get(regexp? ? @tag.match(tv) : @tag == tv)
-      end
-      type
+      type_get(match_variations(tag))
     end
 
     ###
@@ -131,19 +127,46 @@ module Psych
 
     ###
     # Look at all those shiny possibilities! ;)
-    def tag_variations(tag)
-      tv = [tag]
-      tv << tag.sub(/^tag:/, '!tag:')
-      tv << tag.sub(/^tag:/, '!')
-      tv << tag.sub(/^[!]/, 'tag:')
-      tv << tag.sub(/^[!]/, '')
-      tv.dup.each do |v|
-        tv << v.sub(/(,\d+):/, '\1/') if v =~ /,\d+:/
-        tv << v.sub(/(,\d+)\//, '\1:') if v =~ /,\d+\//
+    def match_variations(tag)
+      if md = check(tag)  
+        return md
       end
-      tv.uniq
+
+      return false unless @tag.start_with?('tag:')
+
+      alt = tag
+      alt = alt[1..-1] if alt.start_with?('!')
+      alt = "tag:#{alt}" unless alt.start_with?('tag:')
+
+      try_tags = [alt]
+      try_tags << alt.sub(/(,\d+)\//, '\1:') if /(,\d+)\// =~ alt
+      try_tags << alt.sub(/(,\d+)\:/, '\1/') if /(,\d+)\:/ =~ alt
+
+      try_tags.each do |try_tag|
+        if md = check(try_tag)  
+          return md
+        end
+      end
+
+      return nil if regexp?
+
+      # local matches (SO VERY BAD!!!)
+      if md = @tag.match(/^tag:(.*?)[:\/](.*)$/)
+        domain = md[1]
+        name   = md[2]
+
+        return true if "!#{name}" == tag
+        return true if "!/#{name}" == tag
+        return true if "!#{name}" == "tag:#{tag}"
+      end
+
+      false
+    end
+
+    #
+    def check(tag)
+      regexp? ? @tag.match(tag) : @tag == tag
     end
 
   end
-
 end
