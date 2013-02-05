@@ -50,10 +50,11 @@ module Psych
 
     private
 
+      ##
       # Is a tag a Ruby tag? A Ruby tag is recognized by a specific local tag
       # prefix, `!ruby/`.
       # `
-      # TODO: Probably this should be a globally unique doamin tag instead.
+      # TODO: Probably this should be a globally unique domain tag instead.
       #
       # Returns true if so, false otherwise. [Boolean]
       def ruby_tag?(o)
@@ -72,7 +73,7 @@ module Psych
           # Just becuase it is quoted doesn't mean it doesn't have a type, does it?
           #return register(node, node.value) if node.quoted
           return register(node, node.value) if node.quoted && !node.tag  # literal string
-          return register(node, @ss.tokenize(nodevalue)) unless node.tag 
+          return register(node, @ss.tokenize(node.value)) unless node.tag 
         end
         resolve_tag(node, kind)
       end
@@ -102,14 +103,16 @@ module Psych
               instance = register node, object
               coder = make_coder(node, kind, tag)
 
-              if type.method_defined?(:yaml_initialize) # deprecated behavior
+              if type.method_defined?(:init_with)
+                instance.init_with(coder)
+              elsif type.method_defined?(:yaml_initialize) # deprecated behavior
                 warn "Implementing #{node.class}#yaml_initialize is deprecated, please implement \"init_with(coder)\"" if $VERBOSE
                 instance.yaml_initialize(tag, coder.value)
               else
-                instance.init_with(coder)
+                general_init_with(instance, coder)
               end
             else
-              raise TypeError, "cannot allocate #{type}. Add #new_with method."
+              raise TypeError, "cannot allocate #{type}. Add #{type}.new_with method."
               #coder = make_coder(node, kind, tag)
               #instance = register node, type.new_with(coder)
             end
@@ -123,6 +126,28 @@ module Psych
         instance.tag_uri = node.tag if instance
 
         instance
+      end
+
+      ###
+      # The fallback "init_with", when #init_with is not defined.
+      #
+      # instance - The allocated instance of the tag class. [Object]
+      # coder    - Prepared coder. [Psych::Coder]
+      #
+      # Returns nothing.
+      def general_init_with(instance, coder)
+        case coder.type
+        when :map
+          coder.map.each do |k,v|
+            k = "@#{k}" unless k.to_s.start_with?('@')
+            instance.instance_variable_set(k, v)
+          end
+        else
+          if coder.value
+            #raise TypeError, "#{instance.class} is not a #{coder.type}."
+            warn "#{instance.class} is not a #{coder.type}, value discarded -- `#{coder.value}'" if $VERBOSE
+          end 
+        end
       end
 
       ###
