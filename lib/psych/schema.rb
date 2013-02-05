@@ -23,8 +23,13 @@ module Psych
 
       @directives = options[:directives] || {}
 
-      # Store the block and lazy eval instead?
+      # Store the block and lazy eval.
       @blocks = [block].compact
+
+      # These are part of all schemas (unless `!!` directive is overridden).
+      tag '!!str', String    # tag:yaml.org,2002:str
+      tag '!!map', Hash      # tag:yaml.org,2002:map
+      tag '!!seq', Array     # tag:yaml.org,2002:seq
     end
 
     # %TAG directives.
