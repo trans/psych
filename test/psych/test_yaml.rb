@@ -603,8 +603,11 @@ EOY
 		assert_equal( doc_ct, 3 )
 	end
 
+    # TODO: This idea is based on original YAML 1.0 tag prefix syntax. It should no longer be supported.
+    #       It only still works in Psych b/c adding a domain tag also adds a psuedo local tag, linked
+    #       to the domain tag. But that is a VERY BAD THING and has been deprecated!
 	def test_spec_legacy_domain_prefix
-        skip "This is YAML 1.0 tag prefix syntax, and no longer should be supported."
+        #skip "This is based on YAML 1.0 tag prefix syntax, and should not be supported."
         customer_proc = proc { |type, val|
             if Hash === val
                 scheme, domain, type = type.split( ':', 3 )
