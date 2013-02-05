@@ -1,12 +1,8 @@
 class Struct
-  # FIXME: This feels all sort of hackish. But the problem is that
-  #        subclasses of Struct should use #init_with b/c they
-  #        can use allocate, but Struct itself cannot.
-#  def self.inherited(subclass)
-#    subclass.singleton_class.send(:undef_method, :new_with)
-#  end
-
-  #
+  ###
+  # Struct::Factory is used to construct annonymous Struct classes. Struct class
+  # itself can't be used, b/c then it would need two different means of 
+  # construction/instantiation.
   module Factory
     def self.new_with(coder)
       value = coder.map
