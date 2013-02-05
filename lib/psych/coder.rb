@@ -5,10 +5,25 @@ module Psych
   # automatically assumes a Psych::Nodes::Mapping is being emitted.  Other
   # objects like Sequence and Scalar may be emitted if +seq=+ or +scalar=+ are
   # called, respectively.
+  #
+  # QUERY: This are a few issues with this class:
+  #        1. Why are there separate attributes for each type? When a
+  #           single @value would suffice.
+  #        2. Why doesn't this have an @ivars attribute to pass those 
+  #           along in a very clear manner to the constructor/initializer.
+  #           Current handling of ivars is haphazard, and doesn't work
+  #           for all classes.
+  #        3. Too much info about the represntation is being passed to
+  #           constructor/instializer. This info is fine for emitter,
+  #           but not the other way around. There really should be two
+  #           types of Coder, one for each direction.
+  #        4. What's is the use of @object attribute?
+  #
   class Coder
     attr_accessor :tag, :style, :implicit, :object
     attr_reader   :type, :seq
 
+    # Instantiate new Coder instance.
     def initialize tag, scanner=nil
       @map      = {}
       @seq      = []
@@ -21,6 +36,7 @@ module Psych
       @scanner  = scanner
     end
 
+    # Get scalar value.
     def scalar *args
       if args.length > 0
         warn "#{caller[0]}: Coder#scalar(a,b,c) is deprecated" if $VERBOSE
@@ -75,12 +91,14 @@ module Psych
       @map  = map
     end
 
+    # Set type to `:map` and set a particular key's value.
     def []= k, v
       @type = :map
       @map[k] = v
     end
     alias :add :[]=
 
+    # Set type to `:map` and get a particular key's value.
     def [] k
       @type = :map
       @map[k]
