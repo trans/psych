@@ -1,7 +1,4 @@
-require 'psych/schema/failsafe_schema'
-require 'psych/schema/json_schema'
-
+# The core schema is the default setup of the Schema class.
 module Psych
-  # The set of core YAML tags.
-  CORE_SCHEMA = FAILSAFE_SCHEMA + JSON_SCHEMA
+  CORE_SCHEMA = Schema.new
 end

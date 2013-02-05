@@ -4,31 +4,32 @@ module Psych
   class TestSchema < TestCase
     def setup
       #Psych.reset_schema!
+      @cc = 10  # core tag count
     end
 
-    def test_empty_schema_has_failsafe_tags
+    def test_basic_schema_has_core_tags
       schema = Psych::Schema.new
-      assert_equal(3, schema.size)
+      assert_equal(@cc, schema.size)
     end
 
-    def test_option_to_remove_failsafe_tags
-      schema = Psych::Schema.new(:failsafe=>false)
-      assert_equal(0, schema.size)
+    def test_failsafe_has_only_failsafe_tags
+      schema = Psych::FailsafeSchema.new
+      assert_equal(3, schema.size)
     end
 
     def test_adding_new_tags
       schema = Psych::Schema.new
       schema.tag "!foo", String
-      assert_equal(4, schema.size)
+      assert_equal(@cc+1, schema.size)
     end
 
     def test_adding_via_block_is_lazy
       schema = Psych::Schema.new do |s|
         s.tag "!foo", String
       end
-      assert_equal(3, schema.size)
+      assert_equal(@cc, schema.size)
       schema.resolve!
-      assert_equal(4, schema.size)
+      assert_equal(@cc+1, schema.size)
     end
 
     def test_can_use_define_to_add_lazy_block
@@ -36,18 +37,18 @@ module Psych
       schema.define do |s|
         s.tag "!foo", String
       end
-      assert_equal(3, schema.size)
+      assert_equal(@cc, schema.size)
       schema.resolve!
-      assert_equal(4, schema.size)
+      assert_equal(@cc+1, schema.size)
     end
 
     def test_calling_find_causes_resolve
       schema = Psych::Schema.new do |s|
         s.tag "!foo", String
       end
-      assert_equal(3, schema.size)
+      assert_equal(@cc, schema.size)
       schema.find('!bar')
-      assert_equal(4, schema.size)
+      assert_equal(@cc+1, schema.size)
     end
 
     def test_find_looks_up_matching_tag
@@ -83,11 +84,11 @@ module Psych
       schema = Psych::Schema.new do |s|
         s.tag "!foo", String
       end
-      assert_equal(3, schema.size)
+      assert_equal(@cc, schema.size)
       schema.resolve!
-      assert_equal(4, schema.size)
+      assert_equal(@cc+1, schema.size)
       schema.remove_tag('!foo')
-      assert_equal(3, schema.size)
+      assert_equal(@cc, schema.size)
     end
 
   end

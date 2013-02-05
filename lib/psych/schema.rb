@@ -32,14 +32,32 @@ module Psych
       # Store the block and lazy eval.
       @definition_procs = [block].compact
 
-      unless FalseClass === options[:failsafe]
-        # These are part of all schemas (unless `!!` directive is overridden).
-        # TODO: Should we be using full name so `!!` can't be overridden?
-        tag '!!str', String    # tag:yaml.org,2002:str
-        tag '!!map', Hash      # tag:yaml.org,2002:map
-        tag '!!seq', Array     # tag:yaml.org,2002:seq
-      end
+      define_defaults
     end
+
+  private
+
+    # Define the default YAML schema (unless `!!` directive is overridden).
+    #
+    # TODO: Should we be using full name so `!!` can't be overridden?
+    #
+    def define_defaults
+      # Failsafe Schema
+      tag '!!str', String      # tag:yaml.org,2002:str
+      tag '!!map', Hash        # tag:yaml.org,2002:map
+      tag '!!seq', Array       # tag:yaml.org,2002:seq
+
+      # JSON Schema
+      tag '!!float', Float           # tag:yaml.org,2002:float
+      tag '!!int', Integer           # tag:yaml.org,2002:int
+      tag '!!null', NilClass         # tag:yaml.org,2002:null
+      tag '!!bool', Psych::Boolean   # tag:yaml.org,2002:bool    
+      tag '!!binary', Psych::Binary  # tag:yaml.org,2002:binary
+      tag '!!omap', Psych::Omap      # tag:yaml.org,2002:omap
+      tag '!!set', Psych::Set        # tag:yaml.org,2002:set  
+    end
+
+  public
 
     # %TAG prefix directives.
     attr_reader :prefixes

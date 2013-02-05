@@ -17,7 +17,7 @@ require 'psych/json/tree_builder'
 require 'psych/json/stream'
 require 'psych/handlers/document_stream'
 require 'psych/schema'
-require 'psych/schema/default_schema'
+require 'psych/schema/legacy_schema'
 
 ###
 # = Overview
@@ -345,8 +345,6 @@ module Psych
     File.open(filename, 'r:bom|utf-8') { |f| self.load f, options }
   end
 
-  @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
-
   class << self
     # The global schema is a duplicate of the `DEFAULT_SCHEMA`.
     attr_accessor :global_schema
@@ -357,8 +355,11 @@ module Psych
   #
   # Returns global schema. [Schema]
   def self.reset_schema!
-    @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
+    @global_schema = LEGACY_SCHEMA.dup
   end
+
+  # Go ahead and do it now.
+  reset_schema!
 
   ###
   # Add a tag to the shared global schema.

@@ -5,8 +5,7 @@ require 'tempfile'
 
 class TestPsych < Psych::TestCase
   def teardown
-    Psych.global_schema = Psych::DEFAULT_SCHEMA.dup
-    #Psych.domain_types.clear
+    Psych.reset_schema!
   end
 
   def test_line_width

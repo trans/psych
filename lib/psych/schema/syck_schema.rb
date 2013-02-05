@@ -5,7 +5,7 @@ module Psych
   #
   SYCK_SCHEMA = Schema.new do |s|
 
-    # TODO: Deprecate b/c YAML already has means for explict strings using quotes.
+    # TODO: What's the point? Ruby alread has means for explict strings using quotes.
     s.tag '!str', String
 
     s.tag '!set', Psych::Set
