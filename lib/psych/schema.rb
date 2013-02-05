@@ -65,7 +65,7 @@ module Psych
     def find(otag)
       return nil, nil unless otag
 
-      mtag = normalize_tag(otag)
+      mtag = qualify_tag(otag)
 
       resolve!  # Ah, the beauty of lazy evaluation.
 
@@ -103,7 +103,7 @@ module Psych
     #
     # Returns fully qualified tag name.
     def tag(tag, type=nil, &block)
-      tag = normalize_tag(tag)
+      tag = qualify_tag(tag)
 
       if block
         raise ArgumentError, "2 for 1" if type
@@ -123,8 +123,8 @@ module Psych
       end
     end
 
-    # Define a new Tag URI compliant tag. Given a domain, year and a name
-    # a standard Tag URI definition is created, e.g. `tag:domain,yeat:name`.
+    # Define a true Tag URI compliant tag. Given a domain, year and a name,
+    # a standard Tag URI definition is created, e.g. `tag:domain,year:name`.
     #
     # domain - Domain name to use in tag.
     # year   - The year the domain was established.
@@ -133,12 +133,12 @@ module Psych
     # block  - A procedure the resolves to a class (use instead of `type`).
     #
     # Returns fully qualified tag name.
-    def taguri(domain, year, name, type=nil, &block)
+    def taguri_tag(domain, year, name, type=nil, &block)
       tag = "tag:#{domain},#{Integer(year)}:#{name}"
       tag(tag, type, &block)
     end
 
-    # Define a new domain tag. Given a domain and a name a standard
+    # Define a new domain tag. Given a domain and a name, a standard
     # tag definition is created, e.g. `tag:domain:name`.
     #
     # domain - Domain name to use in tag.
@@ -146,10 +146,29 @@ module Psych
     # type   - Class to which this tag maps.
     # block  - A procedure the resolves to a class (use instead of `type`).
     #
+    # Options
+    #
     # Returns fully qualified tag name.
     def domain_tag(domain, name, type=nil, &block)
       tag = "tag:#{domain}:#{name}"
       tag(tag, type, &block)
+    end
+
+    # Add an *instance* tag. This is NOT RECOMMENDED for adding tags
+    # It is better to define your own class and use #tag.
+    #
+    # tag   - Valid YAML tag. [String]
+    # block - Block that returns an object.
+    #
+    # Returns fully qualified tag name.
+    def instance_tag(tag, &block)
+      klass = Class.new
+      klass.singleton_class.module_eval do
+        define_method(:new_with) do |coder|
+          block.call(coder.tag, coder.value)
+        end
+      end
+      tag(tag, klass)
     end
 
     # Deprecated: Define a new offical YAML tag.
@@ -180,20 +199,6 @@ module Psych
     #  tag(tag, type, &block)
     #end
 
-    # Add an *instance* tag. It is not the recommended approach
-    # to adding tags. It is better to define your own class and use #tag.
-    #
-    # Returns fully qualified tag name.
-    def instance_tag(tag, &block)
-      klass = Class.new
-      klass.singleton_class.module_eval do
-        define_method(:new_with) do |coder|
-          block.call(coder.tag, coder.value)
-        end
-      end
-      tag(tag, klass)
-    end
-
     # Deprecated: Add a legacy *instance* tag.
     #
     # Returns fully qualified tag name.
@@ -215,7 +220,7 @@ module Psych
     #
     # Returns fully qualified tag name.
     def legacy_tag(tag, type=nil, &block)
-      tag = normalize_tag(tag)
+      tag = qualify_tag(tag)
 
       if block
         raise ArgumentError, "2 for 1" if type
@@ -241,7 +246,7 @@ module Psych
     # tag - Valid YAML tag. [String]
     #
     def remove_tag(tag)
-      mtag = normalize_tag(tag)
+      mtag = qualify_tag(tag)
 
       target = @load_tags.find{ |t| mtag == t.tag  }
 
@@ -307,11 +312,12 @@ module Psych
 
   private
 
-    # Normalize tag by substituting prefixes.
+    # Fully qualify a tag by substituting prefixes.
     #
     # tag - Valid YAML tag. [String]
     #
-    def normalize_tag(tag)
+    # Returns qualified tag string. [String]
+    def qualify_tag(tag)
       return nil unless tag
       return tag if Regexp === tag
 
@@ -325,6 +331,7 @@ module Psych
       end
 
       # For domain tags only, replace slash after a date with a colon.
+      # Deprecated this behaviour. They really are two different tags.
       #if tag.start_with?('tag:')
       #  tag = tag.sub(/(,\d+)\//, '\1:')
       #end
