@@ -48,26 +48,36 @@ module Psych
         @st.fetch(o.anchor) { raise BadAlias, "Unknown alias: #{o.anchor}" }
       end
 
-      #def accept target
-      #  super
-      #end
-
     private
 
-      def deserialize o, kind=:scalar
-        if kind == :scalar
-          # Just becuase it is quoted doesn't mean it doesn't have a type, does it?
-          #return register(o, o.value) if o.quoted
-          return register(o, o.value) if o.quoted && !o.tag  # literal string
-          return register(o, @ss.tokenize(o.value)) unless o.tag 
-        end
-        resolve_tag(o, kind)
-      end
-
+      # Is a tag a Ruby tag? A Ruby tag is recognized by a specific local tag
+      # prefix, `!ruby/`.
+      # `
+      # TODO: Probably this should be a globally unique doamin tag instead.
+      #
+      # Returns true if so, false otherwise. [Boolean]
       def ruby_tag?(o)
         o.tag && o.tag.start_with?('!ruby/')
       end
 
+      ###
+      # Deserialize object represented by the given node.
+      #
+      # node - Psych node. [Psych::Nodes::Node]
+      # kind - The kind of node. [:scalar,:map,:seq]
+      #
+      # Returns deserialize object. [Object]
+      def deserialize node, kind=:scalar
+        if kind == :scalar
+          # Just becuase it is quoted doesn't mean it doesn't have a type, does it?
+          #return register(node, node.value) if node.quoted
+          return register(node, node.value) if node.quoted && !node.tag  # literal string
+          return register(node, @ss.tokenize(nodevalue)) unless node.tag 
+        end
+        resolve_tag(node, kind)
+      end
+
+      ###
       # Resolve a node based on its tag.
       #
       # Returns nil if there is no tag, or if there was no type assigned to the tag.
@@ -75,35 +85,47 @@ module Psych
         tag, type = resolve_type(node, kind)
 
         case type
-        when Class
-          if type.method_defined?(:init_with) && type != Struct
-            instance = register node, type.allocate
+        when Class, Module  # modules are for factories
+          if type.singleton_class.method_defined?(:new_with)
             coder = make_coder(node, kind, tag)
-            instance.init_with(coder)
-          elsif type.method_defined?(:yaml_initialize)  # deprecated behavior
-            if $VERBOSE
-              warn "Implementing #{node.class}#yaml_initialize is deprecated, please implement \"init_with(coder)\""
+            instance = register(node, type.new_with(coder))
+          else
+            # can we allocate?
+            success = begin
+              object = type.allocate
+              true
+            rescue TypeError
+              false
             end
-            instance = register node, type.allocate
-            coder = make_coder(node, kind, tag)
-            instance.yaml_initialize(tag, coder.value)
-            coder = make_coder(node, kind, tag)
-            instance = register node, type.new_with(coder)
+
+            if success
+              instance = register node, object
+              coder = make_coder(node, kind, tag)
+
+              if type.method_defined?(:yaml_initialize) # deprecated behavior
+                warn "Implementing #{node.class}#yaml_initialize is deprecated, please implement \"init_with(coder)\"" if $VERBOSE
+                instance.yaml_initialize(tag, coder.value)
+              else
+                instance.init_with(coder)
+              end
+            else
+              raise TypeError, "cannot allocate #{type}. Add #new_with method."
+              #coder = make_coder(node, kind, tag)
+              #instance = register node, type.new_with(coder)
+            end
           end
-        #when Proc  # Deprecated!
-        #  instance = type.call(node.tag, node.value)  # or just (node) ?
-        #  register node, instance
         else
           raise NameError, "unknown tag type #{tag}" if ruby_tag?(node)
           instance = @ss.tokenize(node.value)
           register node, instance
         end
 
-        instance.yaml_tag = node.tag if instance
+        instance.tag_uri = node.tag if instance
 
         instance
       end
 
+      ###
       # Resolve the tag's type, that is to say, its class.
       #
       # o    - YAML node.        [Psych::Nodes::Node]
@@ -123,11 +145,13 @@ module Psych
         return tag, type
       end
 
+      ###
       # Resolve value based on node kind.
       #
       # o    - YAML node.        [Psych::Nodes::Node]
       # kind - The kind of node. [Symbol]
       #
+      # Returns the resolved value. [Object]
       def resolve_value(o, kind)
         case kind
         when :scalar
@@ -150,111 +174,27 @@ module Psych
         value
       end
 
-=begin
-        #if klass = @schema.load_tags[o.tag]
-        #  instance = klass.allocate
-        #  
-        #  if instance.respond_to?(:init_with)
-        #    coder = Psych::Coder.new(o.tag)
-        #    coder.seq = o.children.map { |c| accept c }
-        #    instance.init_with coder
-        #  end
-        # 
-        #  return instance
-        #end
-
-        case o.tag
-        when nil
-          register_empty(o)
-        when '!omap', 'tag:yaml.org,2002:omap'
-          map = register(o, Psych::Omap.new)
-          o.children.each { |a|
-            map[accept(a.children.first)] = accept a.children.last
-          }
-          map
-        when /^!(?:seq|ruby\/array):(.*)$/
-          klass = resolve_class($1)
-          list  = register(o, klass.allocate)
-          o.children.each { |c| list.push accept c }
-          list
-        else
-          register_empty(o)
-        end
-      end
-
-      def visit_Psych_Nodes_Mapping o
-        return revive(@schema.load_tags[o.tag], o) if @schema.load_tags[o.tag]
-        return revive_hash({}, o) unless o.tag
-
-        case o.tag
-        when /^!ruby\/struct:?(.*)?$/
-          klass = resolve_class($1)
-
-          if klass
-            s = register(o, klass.allocate)
-
-            members = {}
-            struct_members = s.members.map { |x| x.to_sym }
-            o.children.each_slice(2) do |k,v|
-              member = accept(k)
-              value  = accept(v)
-              if struct_members.include?(member.to_sym)
-                s.send("#{member}=", value)
-              else
-                members[member.to_s.sub(/^@/, '')] = value
-              end
-            end
-            init_with(s, members, o)
-          else
-            members = o.children.map { |c| accept c }
-            h = Hash[*members]
-            Struct.new(*h.map { |k,v| k.to_sym }).new(*h.map { |k,v| v })
-          end
-
-        when /^!(?:str|ruby\/string)(?::(.*))?/, 'tag:yaml.org,2002:str'
-          klass = resolve_class($1)
-          members = Hash[*o.children.map { |c| accept c }]
-          string = members.delete 'str'
-
-          if klass
-            string = klass.allocate.replace string
-            register(o, string)
-          end
-
-          init_with(string, members.map { |k,v| [k.to_s.sub(/^@/, ''),v] }, o)
-
-
-        when /^!ruby\/exception:?(.*)?$/
-          h = Hash[*o.children.map { |c| accept c }]
-
-          e = build_exception((resolve_class($1) || Exception),
-                              h.delete('message'))
-          init_with(e, h, o)
-
-
-        when /^!map:(.*)$/, /^!ruby\/hash:(.*)$/
-          revive_hash resolve_class($1).new, o
-
-        when '!omap', 'tag:yaml.org,2002:omap'
-          map = register(o, Psych::Omap.new)
-          o.children.each_slice(2) do |l,r|
-            map[accept(l)] = accept r
-          end
-          map
-
-        else
-          revive_hash({}, o)
-        end
-      end
-=end
-
+      ###
+      # Register object, adding it to the alias table.
       #
+      # node   - The node. [Psych::Nodes::Node]
+      # object - The object being created. [Object]
+      #
+      # Returns object. [Object]
       def register node, object
         @st[node.anchor] = object if node.anchor
         object
       end
 
+      ###
       # The `<<` key is a merge key.
+      #
+      # hash  - The hash accepting the merge. [Hash]
+      # node  - The node. [Psych::Nodes::Node]
+      # key   - The merge key, always `<<`. ["<<"]
+      # value - The hash to merge. [Hash]
+      #
+      # Returns nothing.
       def merge_key(hash, node, key, value)
         case node
         when Nodes::Alias
@@ -276,63 +216,18 @@ module Psych
         end
       end
 
-=begin
-      def register_empty object
-        list = register(object, [])
-        object.children.each { |c| list.push accept c }
-        list
-      end
-
-
-      def revive_hash hash, o
-        @st[o.anchor] = hash if o.anchor
-
-        o.children.each_slice(2) { |k,v|
-          key = accept(k)
-          val = accept(v)
-
-          if key == '<<'
-            case v
-            when Nodes::Alias
-              begin
-                hash.merge! val
-              rescue TypeError
-                hash[key] = val
-              end
-            when Nodes::Sequence
-              begin
-                h = {}
-                val.reverse_each do |value|
-                  h.merge! value
-                end
-                hash.merge! h
-              rescue TypeError
-                hash[key] = val
-              end
-            else
-              hash[key] = val
-            end
-          else
-            hash[key] = val
-          end
-
-        }
-        hash
-      end
-
-      def merge_key hash, key, val
-      end
-
-
-      def revive klass, node
-        s = klass.allocate
-        @st[node.anchor] = s if node.anchor
-        h = Hash[*node.children.map { |c| accept c }]
-        init_with(s, h, node)
-      end
-=end
-
-      # Make Coder.
+      ###
+      # Make Coder ot use for constructor/initializer.
+      #
+      # node - Psych node. [Psych::Nodes::Node]
+      # kind - The kind of node. [Symbol]
+      # tag  - Tag used be YAML document. [String]
+      #
+      # Note: The tag argument is only needed for legacy tags, which
+      # can match different document tags for one defined tag. This
+      # can probably be deprecated sometime in the future.
+      #
+      # Returns a prepared coder. [Psych::Coder]
       def make_coder(node, kind, tag)
         coder = Psych::Coder.new(tag, @ss) #node.tag, @ss)
         case kind
@@ -343,7 +238,7 @@ module Psych
         when :seq
           coder.seq = resolve_value(node, kind)
         else
-          # TODO: How is this possible?
+          # TODO: How is this even possible? Why does coder.object exist?
           coder.object = resolve_value(node, kind)
         end
         coder
