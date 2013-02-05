@@ -1,25 +1,32 @@
 require 'psych/helper'
 
 module Psych
-  class Tagged
-    yaml_tag '!foo'
+  $psych_setup = lambda do
+    class Tagged
+      yaml_tag '!foo'
 
-    attr_accessor :baz
+      attr_accessor :baz
 
-    def initialize
-      @baz = 'bar'
+      def initialize
+        @baz = 'bar'
+      end
     end
-  end
 
-  class Foo
-    attr_accessor :parent
+    class Foo
+      attr_accessor :parent
 
-    def initialize parent
-      @parent = parent
+      def initialize parent
+        @parent = parent
+      end
     end
   end
 
   class TestObject < TestCase
+    def setup
+      Psych.reset_schema!
+      $psych_setup.call
+    end
+
     def test_dump_with_tag
       tag = Tagged.new
       assert_match('foo', Psych.dump(tag))
