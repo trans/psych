@@ -1,11 +1,11 @@
 require 'psych/tag'
 
 module Psych
-
   ###
   # TagTypes maps a set of tags to a set of classes or procedures
   # for instantiating the tag as a Ruby object.
   class Schema
+    include Enumerable
 
     # Initialize new Schema instance.
     #
@@ -45,6 +45,16 @@ module Psych
     #       be defined is mapped to the class.
     #
     attr_reader :dump_tags
+
+    # Iterate over each tag in the schema.
+    def each(&block)
+      @load_tags.each(&block)
+    end
+
+    # Returns the number of tags in the schema.
+    def size
+      @load_tags.size
+    end
 
     # Add a lazy schema procedure. The procedure does not get called until #resolve!
     # is called. This happend when #find in utilized, for instance.
@@ -358,5 +368,4 @@ module Psych
     end
 
   end
-
 end
