@@ -14,36 +14,47 @@ module Psych
     #
     # Options
     #
-    #   :directives - %TAG directives preform easy namespacing via prefix
-    #                 substitution.
+    #   :failsafe - Set to `false` to deactive default failsafe schema.
+    #               These are the core tags in all schema. (default: true)
+    #   :prefixes - %TAG prefix directives allow easy namespacing via prefix
+    #               substitution. (default: {})
+    #   :prefix   - Same as above.
     #
     def initialize(options={}, &block)
       @load_tags = []
       @dump_tags = {}
+      @prefixes   = {}
 
-      @directives = options[:directives] || {}
+      (options[:prefixes] || options[:prefix] || {}).each do |handle, prefix|
+        prefix(handle,prefix)
+      end
 
       # Store the block and lazy eval.
-      @blocks = [block].compact
+      @definition_procs = [block].compact
 
-      # These are part of all schemas (unless `!!` directive is overridden).
-      tag '!!str', String    # tag:yaml.org,2002:str
-      tag '!!map', Hash      # tag:yaml.org,2002:map
-      tag '!!seq', Array     # tag:yaml.org,2002:seq
+      unless FalseClass === options[:failsafe]
+        # These are part of all schemas (unless `!!` directive is overridden).
+        # TODO: Should we be using full name so `!!` can't be overridden?
+        tag '!!str', String    # tag:yaml.org,2002:str
+        tag '!!map', Hash      # tag:yaml.org,2002:map
+        tag '!!seq', Array     # tag:yaml.org,2002:seq
+      end
     end
 
-    # %TAG directives.
-    attr_reader :directives
+    # %TAG prefix directives.
+    attr_reader :prefixes
 
     # Tag table in the form of `tag => class`.
     attr_reader :load_tags
 
     # Tag table in the form of `class => tag`.
     #
-    # TODO: Technically more than one tag can map to the same class. So we might
-    #       change this to an array of tags. Presently only the last tag to
-    #       be defined is mapped to the class.
+    # Technically more than one tag can map to the same class. Only the
+    # last tag defined for a given class is mapped to that class via
+    # dump_tags.
     #
+    # IMPORTANT! This means the last tag defined take precedence over 
+    # those defined before it!
     attr_reader :dump_tags
 
     # Iterate over each tag in the schema.
@@ -59,16 +70,15 @@ module Psych
     # Add a lazy schema procedure. The procedure does not get called until #resolve!
     # is called. This happend when #find in utilized, for instance.
     #
-    # TODO: Need a better name for this method ?
-    #
-    def apply(&block)
-      @blocks << block
+    # Returns nothing.
+    def define(&block)
+      @definition_procs << block; nil
     end
 
     # Resolve intialization block.
     def resolve!
-      until @blocks.empty?
-        @blocks.shift.call(self)
+      until @definition_procs.empty?
+        @definition_procs.shift.call(self)
       end
     end
 
@@ -108,6 +118,24 @@ module Psych
     def tags
       #resolve!  # TODO: Should we resolve here?
       @load_tags
+    end
+
+    # Define a tag prefix directive.
+    #
+    # Note, it recommend that all directives be
+    # defined first! Defining directives after some tags could lead to
+    # two identical handles defining different tags, which would not
+    # make any sense for an actual YAML document. This may be enforced
+    # in future versions.
+    #
+    # handle - Valid tag handle. Must start and end with `!`. [String]
+    # prefix - Prefix to replace handle with. [String]
+    #
+    # Returns fully qualified tag name.
+    def prefix(handle, prefix)
+      raise ArgumentError unless handle.start_with?('!')
+      raise ArgumentError unless handle.end_with?('!')
+      @prefixes[handle] = prefix.to_str
     end
 
     # Define a tag.
@@ -261,6 +289,9 @@ module Psych
     # tag - Valid YAML tag. [String]
     #
     def remove_tag(tag)
+      # should we resolve? can't remove a tag that's not there yet
+      resolve!
+
       mtag = qualify_tag(tag)
 
       target = @load_tags.find{ |t| mtag == t.tag  }
@@ -277,11 +308,11 @@ module Psych
     def absorb(other)
       raise ArgumentError unless Schema === other
 
-      @blocks     = other.blocks + @blocks
-      @load_tags  = other.load_tags + @load_tags
+      @definition_procs = other.definition_procs + @definition_procs
+      @load_tags = other.load_tags + @load_tags
 
-      @dump_tags  = other.dump_tags.merge @dump_tags
-      @directives = other.directives.merge @directives
+      @dump_tags = other.dump_tags.merge @dump_tags
+      @prefixes = other.prefixes.merge @prefixes
     end
 
     # Add this Schema with another Schema producing a new Schema.
@@ -320,9 +351,9 @@ module Psych
 
   protected
 
-    # TODO: Better name.
-    def blocks
-      @blocks
+    # Returns list of definition procedures to be resolved.
+    def definition_procs
+      @definition_procs
     end
 
   private
@@ -351,9 +382,9 @@ module Psych
       #  tag = tag.sub(/(,\d+)\//, '\1:')
       #end
 
-      # How to handle regex in this case? Maybe we have to match with directives after the fact, in #find.
+      # How to handle regex in this case? Maybe we have to match with prefixes after the fact, in #find.
       if tag.start_with?('!')
-        @directives.each do |handle, prefix|
+        @prefixes.each do |handle, prefix|
           if tag.start_with?(handle)
             return tag.sub(handle, prefix)
           end
