@@ -345,6 +345,13 @@ module Psych
     File.open(filename, 'r:bom|utf-8') { |f| self.load f, options }
   end
 
+  @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
+
+  class << self
+    # The global schema is a duplicate of the `DEFAULT_SCHEMA`.
+    attr_accessor :global_schema
+  end
+
   ###
   # Reset the global schema to `DEFAULT_SCHEMA`.
   #
@@ -352,8 +359,6 @@ module Psych
   def self.reset_schema!
     @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
   end
-
-  @global_schema = DEFAULT_SCHEMA.dup  #Schema.new(DEFAULT_SCHEMA)
 
   ###
   # Add a tag to the shared global schema.
@@ -370,6 +375,11 @@ module Psych
     @global_schema.tag(tag, type, &block)
   end
 
+  class << self
+    # Same as `Psych.tag`.
+    alias :add_tag :tag
+  end
+
   ###
   # Remove a tag from the global schema.
   #
@@ -381,7 +391,10 @@ module Psych
   end
 
   class << self
+     # Same as `Psych.tag`.
      alias :add_tag :tag
+
+     # The global schema is a duplicate of the `DEFAULT_SCHEMA`.
      attr_accessor :global_schema
   end
 
@@ -395,8 +408,7 @@ module Psych
   def self.add_domain_type domain, name, &block
     tags = []
     tags << "tag:#{domain}:#{name}"
-    #tags << "tag:#{name}"
-    #tags << "#{domain}:#{name}"
+    tags << "tag:#{name}"   # This is so bad!
 
     tags.each do |tag|
       @global_schema.legacy_instance_tag(tag, &block)
