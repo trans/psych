@@ -375,6 +375,8 @@ module Psych
     @global_schema.tag(tag, type, &block)
   end
 
+  # TODO: domain_tag, taguri_tag ?
+
   class << self
     # Same as `Psych.tag`.
     alias :add_tag :tag
@@ -397,43 +399,4 @@ module Psych
      # The global schema is a duplicate of the `DEFAULT_SCHEMA`.
      attr_accessor :global_schema
   end
-
-  # :stopdoc:
-  ###
-  # Deprectated: Make your own class and use #tag instead.
-  #
-  # This method creates a legacy tag which matches many different
-  # actual tags for backward compatability.
-  #
-  def self.add_domain_type domain, name, &block
-    tags = []
-    tags << "tag:#{domain}:#{name}"
-    tags << "tag:#{name}"   # This is so bad!
-
-    tags.each do |tag|
-      @global_schema.legacy_instance_tag(tag, &block)
-    end
-
-    tags
-  end
-
-  ###
-  # Deprectated: Make your own class and use #tag instead.
-  def self.add_builtin_type name, &block
-    tag = "tag:yaml.org,2002:#{name}"
-    @global_schema.legacy_instance_tag(tag, &block)
-  end
-
-  ###
-  # Deprecated: Remove a tag from the global schema.
-  #
-  # Note that this doesn't quite work like it did, b/c it now
-  # needs to use the full tag name to remove a legacy type.
-  # e.g. `builtin_type('foo')` => 'tag:yaml.org,2002:foo'
-  #
-  # Returns tag. [String]
-  def self.remove_type tag
-    @global_schema.remove_tag tag
-  end
-  # :startdoc:
 end
