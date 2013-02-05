@@ -17,6 +17,15 @@ to and from the YAML format.
   # Emit YAML from a Ruby object
   Psych.dump("foo")     # => "--- foo\n...\n"
 
+  # Define custom schema.
+  schema = Psych::Schema.new do |s|
+    s.tag '!rng', Range
+  end
+
+  # Limit loading to schema.
+  Psych.load('--- !rng 1..3', :schema=>schema)
+  # => 1..3
+
 == Dependencies
 
 * libyaml
